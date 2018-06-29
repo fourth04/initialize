@@ -1,7 +1,7 @@
 #!/bin/bash
 
-DPDK_NICCONF_FILE="/etc/sdpi/dpdk_nic_config"
-PROG_CONF_FILE="/etc/sdpi/sdpi.ini"
+DPDK_NICCONF_FILE="D:\\workspace\\go\\workspace\\src\\github.com\\fourth04\\initialize\\docs\\dpdk_nic_config"
+PROG_CONF_FILE="D:\\workspace\\go\\workspace\\src\\github.com\\fourth04\\initialize\\docs\\sdpi.ini"
 
 INI_SECTION_DPI="dpi"
 INI_SECTION_DNS="dns"

@@ -1,10 +1,8 @@
-// Package utils provides ...
 package utils
 
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -38,13 +36,14 @@ func ErrHandleFatalln(err error, msg string) {
 func Executor(s string) error {
 	s = strings.TrimSpace(s)
 	if s == "" {
-		return nil
+		return errors.New("you need to pass the something arguments")
 	} else if s == "quit" || s == "exit" {
-		fmt.Println("Bye!")
+		log.Println("Bye!")
 		os.Exit(0)
 	}
 
 	cmd := exec.Command("bash", "-c", s)
+	// cmd := exec.Command("echo", s)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -62,6 +61,7 @@ func ExecuteAndGetResult(s string) (string, string, error) {
 
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command("bash", "-c", s)
+	// cmd := exec.Command("echo", s)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -69,4 +69,25 @@ func ExecuteAndGetResult(s string) (string, string, error) {
 		return "", "", err
 	}
 	return string(stdout.Bytes()), string(stderr.Bytes()), nil
+}
+
+func IsFileExist(filepath string) (bool, error) {
+	_, err := os.Stat(filepath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// Contains slice contain sub
+func Contains(slice []string, sub string) bool {
+	for _, str := range slice {
+		if str == sub {
+			return true
+		}
+	}
+	return false
 }
