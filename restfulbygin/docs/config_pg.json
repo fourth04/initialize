@@ -1,0 +1,9 @@
+{
+    "dialect": "postgres",
+    "db_path": "user=gdgyy password=123456Qw! dbname=http sslmode=disable",
+    "db_log_mode": true,
+    "jwt_realm": "test zone",
+    "jwt_key": "secret key",
+    "jwt_timeout": "2h",
+    "jwt_max_refresh": "2h"
+}
