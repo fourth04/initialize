@@ -1,4 +1,0 @@
-package: github.com/fourth04/restfulbygin
-import:
-
-- package: github.com/Sirupsen/logrus
