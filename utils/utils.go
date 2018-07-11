@@ -193,6 +193,30 @@ func ExecuteAndGetResult(s string) (string, string, error) {
 	return strings.TrimSpace(string(stdout.Bytes())), strings.TrimSpace(string(stderr.Bytes())), nil
 }
 
+// ExecuteAndGetResult execute input string and return the echo
+func ExecuteAndGetResultCombineError(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", errors.New("you need to pass the something arguments")
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd := exec.Command("bash", "-c", s)
+	log.Println("执行命令：", "bash", "-c", s)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+	log.Println("执行结果：", strings.TrimSpace(string(stdout.Bytes())))
+	stderrStr := strings.TrimSpace(string(stderr.Bytes()))
+	if stderrStr != "" {
+		return "", errors.New(stderrStr)
+	}
+	return strings.TrimSpace(string(stdout.Bytes())), nil
+}
+
 // IsFileExist checks is the file exist or not
 func IsFileExist(filepath string) (bool, error) {
 	_, err := os.Stat(filepath)

@@ -81,10 +81,7 @@ func main() {
 		utils.ErrHandleFatalln(err, "输入参数错误！")
 		switch resultDpdkNicConfig {
 		case "yes":
-			_, stderr, err := utils.ExecuteAndGetResult("dpdk-setup.sh")
-			if stderr != "" {
-				log.Fatalln("dpdk驱动安装失败！", stderr)
-			}
+			_, err := utils.ExecuteAndGetResultCombineError("dpdk-setup.sh")
 			utils.ErrHandleFatalln(err, "dpdk驱动安装失败！")
 			log.Println("dpdk驱动安装成功！")
 		case "no":
@@ -104,10 +101,7 @@ func main() {
 		utils.ErrHandleFatalln(err, "输入参数错误！")
 		switch resultDpdkNicConfig {
 		case "yes":
-			_, stderr, err := utils.ExecuteAndGetResult("service sdpid stop")
-			if stderr != "" {
-				log.Fatalln("进程停止失败！", stderr)
-			}
+			_, err := utils.ExecuteAndGetResultCombineError("service sdpid stop")
 			utils.ErrHandleFatalln(err, "进程停止失败！")
 			log.Println("进程停止成功！")
 		case "no":
@@ -127,10 +121,7 @@ func main() {
 		utils.ErrHandleFatalln(err, "输入参数错误！")
 		switch resultDpdkNicConfig {
 		case "yes":
-			_, stderr, err := utils.ExecuteAndGetResult("dpdk-nic-unbind.sh")
-			if stderr != "" {
-				log.Fatalln("dpdk网卡解绑失败！", stderr)
-			}
+			_, err := utils.ExecuteAndGetResultCombineError("dpdk-nic-unbind.sh")
 			utils.ErrHandleFatalln(err, "dpdk网卡解绑失败！")
 			log.Println("dpdk网卡解绑完成！")
 		case "no":
@@ -142,20 +133,21 @@ func main() {
 	log.Println("正在读取dpdk_nic_bind.sh...")
 	options, err := sysinfo.ReadDpdkNicBindShell("/bin/dpdk-nic-bind.sh")
 	utils.ErrHandleFatalln(err, "读取dpdk_nic_bind.sh失败：")
-	log.Println("读取dpdk_nic_bind.sh完成！")
 
 	dpdkNicConfigFilepath, ok := options["DPDK_NICCONF_FILE"]
 	if !ok {
-		log.Fatal("DPDK_NICCONF_FILE参数配置错误！")
+		log.Fatal("dpdk_nic_bind.sh DPDK_NICCONF_FILE参数配置错误！")
 	}
 	progConfigFilepath, ok := options["PROG_CONF_FILE"]
 	if !ok {
-		log.Fatal("PROG_CONF_FILE参数配置错误！")
+		log.Fatal("dpdk_nic_bind.sh PROG_CONF_FILE参数配置错误！")
 	}
+	log.Println("读取dpdk_nic_bind.sh完成！")
 
 	log.Println("正在检测dpdk_nic_config文件状态！")
-	isFileExist, err := utils.IsFileExist(dpdkNicConfigFilepath)
-	if isFileExist {
+
+	isDpdkNicConfigFileExist, err := utils.IsFileExist(dpdkNicConfigFilepath)
+	if isDpdkNicConfigFileExist {
 		promptYesNoQuit := promptui.Prompt{
 			Label:    "检测到dpdk_nic_config已存在，请选择是否删除该文件：yes/no",
 			Validate: validateYesNo,
@@ -267,26 +259,20 @@ func main() {
 	log.Println("修改sdpi.ini配置文件完成！")
 
 	log.Println("正在尝试进行dpdk网卡绑定...")
-	_, stderr, err := utils.ExecuteAndGetResult("dpdk-nic-bind.sh")
-	if stderr != "" {
-		log.Fatalln("dpdk网卡绑定失败！", stderr)
-	}
+	_, err = utils.ExecuteAndGetResultCombineError("dpdk-nic-bind.sh")
 	utils.ErrHandleFatalln(err, "dpdk网卡绑定失败！")
 	log.Println("dpdk网卡绑定完成！")
 
 	log.Println("正在检测dpdk_nic_config文件生成状态！")
-	isFileExist, err = utils.IsFileExist(dpdkNicConfigFilepath)
-	if !isFileExist {
+	isDpdkNicConfigFileExist, err = utils.IsFileExist(dpdkNicConfigFilepath)
+	if !isDpdkNicConfigFileExist {
 		log.Println("生成dpdk_nic_config文件失败！")
 	}
 	utils.ErrHandleFatalln(err, "检测到dpdk_nic_config生成失败！")
 	log.Println("dpdk_nic_config文件生成成功！")
 
 	log.Println("正在尝试进程启动...")
-	_, stderr, err = utils.ExecuteAndGetResult("service sdpid restart")
-	if stderr != "" {
-		log.Fatalln("进程启动失败！", stderr)
-	}
+	_, err = utils.ExecuteAndGetResultCombineError("service sdpid restart")
 	utils.ErrHandleFatalln(err, "进程启动失败！")
 	log.Println("进程启动完成！")
 
@@ -367,10 +353,7 @@ func main() {
 		utils.ErrHandleFatalln(err, "输入参数错误！")
 
 		if resultGW != "" {
-			_, stderr, err = utils.ExecuteAndGetResult("route add default gw " + resultGW)
-			if stderr != "" {
-				log.Fatalln("业务网关配置失败！", stderr)
-			}
+			_, err = utils.ExecuteAndGetResultCombineError("route add default gw " + resultGW)
 			utils.ErrHandleFatalln(err, "业务网关配置失败！")
 			log.Println("业务网关配置完成！")
 		}
@@ -382,10 +365,7 @@ func main() {
 	N = 3
 	for i := 0; i < N; i++ {
 		log.Println("正在重启网络服务！")
-		_, stderr, err = utils.ExecuteAndGetResult("service network restart")
-		if stderr != "" {
-			log.Fatalln("重启网络服务失败！", stderr)
-		}
+		_, err = utils.ExecuteAndGetResultCombineError("service network restart")
 		utils.ErrHandleFatalln(err, "重启网络服务失败！")
 		log.Println("重启网络服务成功！")
 

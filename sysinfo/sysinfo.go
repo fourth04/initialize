@@ -16,23 +16,23 @@ import (
 )
 
 type IfCfg struct {
-	TYPE               string
-	BOOTPROTO          string
-	DEFROUTE           string
-	PEERDNS            string
-	PEERROUTES         string
-	IPV4_FAILURE_FATAL string
-	IPV6INIT           string
-	IPV6_AUTOCONF      string
-	IPV6_DEFROUTE      string
-	IPV6_PEERDNS       string
-	IPV6_PEERROUTES    string
-	IPV6_FAILURE_FATAL string
-	DEVICE             string
-	ONBOOT             string
-	IPADDR             string
-	GATEWAY            string
-	NETMASK            string
+	TYPE               string `json:"type"`
+	BOOTPROTO          string `json:"bootproto"`
+	DEFROUTE           string `json:"defroute"`
+	PEERDNS            string `json:"peerdns"`
+	PEERROUTES         string `json:"peerroutes"`
+	IPV4_FAILURE_FATAL string `json:"ipv4_failure_fatal"`
+	IPV6INIT           string `json:"ipv6_init"`
+	IPV6_AUTOCONF      string `json:"ipv6_autoconf"`
+	IPV6_DEFROUTE      string `json:"ipv6_defroute"`
+	IPV6_PEERDNS       string `json:"ipv6_peerdns"`
+	IPV6_PEERROUTES    string `json:"ipv6_peerroutes"`
+	IPV6_FAILURE_FATAL string `json:"ipv6_failure_fatal"`
+	DEVICE             string `json:"device"`
+	ONBOOT             string `json:"onboot"`
+	IPADDR             string `json:"ipaddr"`
+	GATEWAY            string `json:"gateway"`
+	NETMASK            string `json:"netmask"`
 }
 
 func (ifcfg IfCfg) SaveConfigFile(filepath string) error {
@@ -229,6 +229,31 @@ func IsDpdkBinded() bool {
 		return false
 	}
 	return true
+}
+
+func IsDpdkNicConfigFileExist() bool {
+	options, err := ReadDpdkNicBindShell("/bin/dpdk-nic-bind.sh")
+	if err != nil {
+		return false
+	}
+	dpdkNicConfigFilepath, ok := options["PROG_CONF_FILE"]
+	if !ok {
+		return false
+	}
+	isDpdkNicConfigFileExist, err := utils.IsFileExist(dpdkNicConfigFilepath)
+	if err != nil {
+		return false
+	}
+	return isDpdkNicConfigFileExist
+}
+
+func GetRuningStatus() map[string]bool {
+	return map[string]bool{
+		"IsDpdkDriverOK":           IsDpdkDriverOK(),
+		"IsProcessRuning":          IsProcessRuning("sdpi"),
+		"IsDpdkBinded":             IsDpdkBinded(),
+		"IsDpdkNicConfigFileExist": IsDpdkNicConfigFileExist(),
+	}
 }
 
 func ReadDpdkNicBindShell(filepath string) (map[string]string, error) {
