@@ -28,11 +28,11 @@ type IfCfg struct {
 	IPV6_PEERDNS       string `json:"ipv6_peerdns"`
 	IPV6_PEERROUTES    string `json:"ipv6_peerroutes"`
 	IPV6_FAILURE_FATAL string `json:"ipv6_failure_fatal"`
-	DEVICE             string `json:"device"`
+	DEVICE             string `json:"device" binding:"required"`
 	ONBOOT             string `json:"onboot"`
-	IPADDR             string `json:"ipaddr"`
+	IPADDR             string `json:"ipaddr" binding:"required"`
 	GATEWAY            string `json:"gateway"`
-	NETMASK            string `json:"netmask"`
+	NETMASK            string `json:"netmask" binding:"required"`
 }
 
 func (ifcfg IfCfg) SaveConfigFile(filepath string) error {
@@ -215,7 +215,7 @@ func IsDpdkDriverOK() bool {
 	return true
 }
 
-func IsProcessRuning(processName string) bool {
+func IsProcessRunning(processName string) bool {
 	processes := GetProcesses(processName)
 	if len(processes) == 0 {
 		return false
@@ -231,15 +231,24 @@ func IsDpdkBinded() bool {
 	return true
 }
 
-func IsDpdkNicConfigFileExist() bool {
+func IsDpdkNicBindShellOK() (map[string]string, bool) {
 	options, err := ReadDpdkNicBindShell("/bin/dpdk-nic-bind.sh")
 	if err != nil {
-		return false
+		return nil, false
 	}
-	dpdkNicConfigFilepath, ok := options["PROG_CONF_FILE"]
+	_, ok := options["PROG_CONF_FILE"]
+	if !ok {
+		return nil, false
+	}
+	return options, true
+}
+
+func IsDpdkNicConfigFileExist() bool {
+	options, ok := IsDpdkNicBindShellOK()
 	if !ok {
 		return false
 	}
+	dpdkNicConfigFilepath := options["PROG_CONF_FILE"]
 	isDpdkNicConfigFileExist, err := utils.IsFileExist(dpdkNicConfigFilepath)
 	if err != nil {
 		return false
@@ -247,12 +256,36 @@ func IsDpdkNicConfigFileExist() bool {
 	return isDpdkNicConfigFileExist
 }
 
-func GetRuningStatus() map[string]bool {
-	return map[string]bool{
-		"IsDpdkDriverOK":           IsDpdkDriverOK(),
-		"IsProcessRuning":          IsProcessRuning("sdpi"),
-		"IsDpdkBinded":             IsDpdkBinded(),
-		"IsDpdkNicConfigFileExist": IsDpdkNicConfigFileExist(),
+type RunningStatus struct {
+	IsDpdkDriverOKFlag           bool `json:"is_dpdk_driver_ok_flag" binding:"required"`
+	IsProcessRunningFlag         bool `json:"is_process_running_flag" binding:"required"`
+	IsDpdkBindedFlag             bool `json:"is_dpdk_binded_flag" binding:"required"`
+	IsDpdkNicBindShellOKFlag     bool `json:"is_dpdk_nic_bind_shell_ok_flag"`
+	IsDpdkNicConfigFileExistFlag bool `json:"is_dpdk_nic_config_file_exist_flag" binding:"required"`
+}
+
+func GetRunningStatus() RunningStatus {
+	var isDpdkNicBindShellOKFlag, isDpdkNicConfigFileExistFlag bool
+	options, ok := IsDpdkNicBindShellOK()
+	if !ok {
+		isDpdkNicBindShellOKFlag = false
+		isDpdkNicConfigFileExistFlag = false
+	} else {
+		isDpdkNicBindShellOKFlag = true
+		dpdkNicConfigFilepath := options["PROG_CONF_FILE"]
+		tmpFlag, err := utils.IsFileExist(dpdkNicConfigFilepath)
+		if err != nil {
+			isDpdkNicConfigFileExistFlag = false
+		} else {
+			isDpdkNicConfigFileExistFlag = tmpFlag
+		}
+	}
+	return RunningStatus{
+		IsDpdkDriverOKFlag:           IsDpdkDriverOK(),
+		IsProcessRunningFlag:         IsProcessRunning("sdpi"),
+		IsDpdkBindedFlag:             IsDpdkBinded(),
+		IsDpdkNicBindShellOKFlag:     isDpdkNicBindShellOKFlag,
+		IsDpdkNicConfigFileExistFlag: isDpdkNicConfigFileExistFlag,
 	}
 }
 

@@ -91,7 +91,7 @@ func main() {
 	log.Println("dpdk驱动已安装！")
 
 	log.Println("正在检测进程运行情况...")
-	IsProcessRuningFlag := sysinfo.IsProcessRuning("sdpi")
+	IsProcessRuningFlag := sysinfo.IsProcessRunning("sdpi")
 	if IsProcessRuningFlag {
 		promptYesNoQuit := promptui.Prompt{
 			Label:    "进程已启动，请选择是否需要停止进程：yes/no",
@@ -147,6 +147,7 @@ func main() {
 	log.Println("正在检测dpdk_nic_config文件状态！")
 
 	isDpdkNicConfigFileExist, err := utils.IsFileExist(dpdkNicConfigFilepath)
+	utils.ErrHandleFatalln(err, "检测dpdk_nic_config失败！")
 	if isDpdkNicConfigFileExist {
 		promptYesNoQuit := promptui.Prompt{
 			Label:    "检测到dpdk_nic_config已存在，请选择是否删除该文件：yes/no",
@@ -156,14 +157,13 @@ func main() {
 		utils.ErrHandleFatalln(err, "输入参数错误！")
 		switch resultDpdkNicConfig {
 		case "yes":
-			err := os.Remove("dpdk_nic_config")
+			err := os.Remove(dpdkNicConfigFilepath)
 			utils.ErrHandleFatalln(err, "删除dpdk_nic_config遇错！")
 			log.Println("删除dpdk_nic_config成功！")
 		case "no":
 			os.Exit(0)
 		}
 	}
-	utils.ErrHandleFatalln(err, "检测dpdk_nic_config失败！")
 	log.Println("检测到dpdk_nic_config未存在！")
 
 	// ==================== 第一步，配置Linux系统相关配置 ====================
