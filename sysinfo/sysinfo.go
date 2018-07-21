@@ -477,10 +477,10 @@ func CfgServiceIf(device, ipaddr, netmask, saveDirpath string) (IfCfg, error) {
 	ifcfg.IPADDR = ipaddr
 	ifcfg.NETMASK = netmask
 
-	// _, err := utils.ExecuteAndGetResultCombineError(fmt.Sprintf("ifconfig %s %s netmask %s", device, ipaddr, netmask))
-	// if err != nil {
-	// return ifcfg, err
-	// }
+	_, err := utils.ExecuteAndGetResultCombineError(fmt.Sprintf("ifconfig %s %s netmask %s", device, ipaddr, netmask))
+	if err != nil {
+		return ifcfg, err
+	}
 
 	saveFilepath := filepath.Join(saveDirpath, "ifcfg-"+ifcfg.DEVICE)
 	err := ifcfg.SaveConfigFile(saveFilepath)
