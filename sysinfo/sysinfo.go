@@ -92,7 +92,7 @@ type Adapter struct {
 }
 
 func GetIfInfo() []*Adapter {
-	stdout, _, _ := utils.ExecuteAndGetResult("ifconfig -a")
+	stdout, _ := utils.ExecuteAndGetResultCombineErrorNoLog("ifconfig -a")
 
 	var pat string
 
@@ -191,14 +191,15 @@ func GetIfInfoService(ip string) []*Adapter {
 }
 
 func GetDpdkDevBind() []string {
-	stdout, stderr, err := utils.ExecuteAndGetResult("dpdk-devbind.py --status | grep 'drv=igb_uio' | awk '{print $1}'")
-	if stderr != "" || err != nil {
-		log.Println("获取dpdk网卡绑定状态失败！", stderr)
+	stdout, err := utils.ExecuteAndGetResultCombineError("dpdk-devbind.py --status | grep 'drv=igb_uio' | awk '{print $1}'")
+	if err != nil {
 		utils.ErrHandlePrintln(err, "获取dpdk网卡绑定状态失败！")
 		return []string{}
 	}
-	log.Println("执行结果：", stdout)
-	return strings.Split(stdout, "\n")
+	if strings.TrimSpace(stdout) == "" {
+		return []string{}
+	}
+	return strings.Split(strings.TrimSpace(stdout), utils.CRLF)
 }
 
 func GetProcesses(processName string) []ps.Process {
@@ -215,7 +216,7 @@ func GetProcesses(processName string) []ps.Process {
 
 func IsDpdkDriverOK() bool {
 	log.Println("正在获取dpdk驱动安装情况...")
-	stdout, _, _ := utils.ExecuteAndGetResult("ls /mnt")
+	stdout, _ := utils.ExecuteAndGetResultCombineError("ls /mnt")
 	if !strings.Contains(stdout, "huge") {
 		return false
 	}
@@ -326,7 +327,7 @@ func GetCrontabSlice() ([]string, error) {
 		return nil, err
 	}
 	crontabStr := string(crontabBytes)
-	crontabSlice := strings.Split(crontabStr, utils.CRLF)
+	crontabSlice := strings.Split(strings.TrimSpace(crontabStr), utils.CRLF)
 	return crontabSlice, nil
 }
 
@@ -350,7 +351,7 @@ func CfgNtpIP(ntpIP string) error {
 	if err != nil {
 		return err
 	}
-	crontabNtp := fmt.Sprintf("*/30 * * * * ntpdate %s", ntpIP)
+	crontabNtp := fmt.Sprintf("*/30 * * * * ntpdate %s"+utils.CRLF, ntpIP)
 	isNew := true
 	for ix, line := range crontabSlice {
 		if strings.Contains(line, "ntpdate") {
@@ -438,8 +439,8 @@ func PingDial(ipAddr string, timeout time.Duration) (bool, error) {
 }
 
 type Route struct {
-	Destination string
-	Nexthop     string
+	Destination string `json:"destination"`
+	Nexthop     string `json:"nexthop"`
 }
 
 func GetRouteInfoManage(ifName string) ([]Route, error) {
@@ -463,7 +464,7 @@ func CfgManageRoute(ifName string, routes []Route) error {
 	for _, route := range routes {
 		lines = append(lines, fmt.Sprintf("%s via %s", route.Destination, route.Nexthop))
 	}
-	content := []byte(strings.Join(lines, utils.CRLF))
+	content := []byte(strings.Join(lines, utils.CRLF) + utils.CRLF)
 	err := utils.WriteFileFast("/etc/sysconfig/network-scripts/route-"+ifName, content)
 	if err != nil {
 		return err

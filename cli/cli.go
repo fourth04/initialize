@@ -174,8 +174,14 @@ func main() {
 	log.Println("正在配置NTP服务地址...")
 	ntpIP, err := sysinfo.GetNtpIP()
 	utils.ErrHandleFatalln(err, "获取NTP服务地址失败！")
+	var promptNtpIPLable string
+	if ntpIP == "" {
+		promptNtpIPLable = fmt.Sprintf("当前未配置NTP服务地址，请输入新地址，直接回车则跳过")
+	} else {
+		promptNtpIPLable = fmt.Sprintf("当前配置的NTP服务地址为：%s，请输入新地址，直接回车则跳过", ntpIP)
+	}
 	promptNtpIP := promptui.Prompt{
-		Label:    fmt.Sprintf("当前NTP服务地址为%s：，请输入新地址，直接回车则跳过", ntpIP),
+		Label:    promptNtpIPLable,
 		Validate: validateIPOrNil,
 	}
 	newNtpIP, err := promptNtpIP.Run()
@@ -190,7 +196,7 @@ func main() {
 	msAgentIniCfg, err := sysinfo.GetMsAgentIniCfg()
 	utils.ErrHandleFatalln(err, "获取DCP服务地址失败！")
 	promptDcpIP := promptui.Prompt{
-		Label:    fmt.Sprintf("当前DCP服务地址为%s：，请输入新地址，直接回车则跳过", msAgentIniCfg["ms_host"]),
+		Label:    fmt.Sprintf("当前DCP服务地址为%s，请输入新地址，直接回车则跳过", msAgentIniCfg["ms_host"]),
 		Validate: validateIPOrNil,
 	}
 	newDcpIP, err := promptDcpIP.Run()
