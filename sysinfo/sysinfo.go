@@ -1,8 +1,10 @@
 package sysinfo
 
 import (
+	"fmt"
 	"log"
 	"net"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -10,6 +12,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/Unknwon/goconfig"
 	"github.com/fourth04/initialize/utils"
 	ps "github.com/mitchellh/go-ps"
 	fastping "github.com/tatsushid/go-fastping"
@@ -48,7 +51,6 @@ func (ifcfg IfCfg) SaveConfigFile(filepath string) error {
 			cfgStr += key + "=" + value + utils.CRLF
 		}
 	}
-	cfgStr = strings.TrimSpace(cfgStr)
 	err := utils.WriteFileFast(filepath, []byte(cfgStr))
 	return err
 }
@@ -76,7 +78,7 @@ func NewDefaultIfCfg() IfCfg {
 }
 
 type Adapter struct {
-	Name       string
+	Name       string `json:"name" binding:"required"`
 	Flags      []string
 	Mtu        int
 	Inet       string
@@ -90,9 +92,6 @@ type Adapter struct {
 }
 
 func GetIfInfo() []*Adapter {
-	// bytes, _ := utils.ReadFileFast("..\\docs\\ifconfig.txt")
-	// stdout := string(bytes)
-	// stdout, _, _ := utils.ExecuteAndGetResult("cat ..\\docs\\ifconfig.txt")
 	stdout, _, _ := utils.ExecuteAndGetResult("ifconfig -a")
 
 	var pat string
@@ -156,14 +155,22 @@ func GetIfInfoHasPrefix(prefix string) []*Adapter {
 	return rv
 }
 
-func GetIfInfoManage(ip string) *Adapter {
+func GetIfInfoManage(ip string) []*Adapter {
 	adapters := GetIfInfoHasPrefix("enp")
+	var rv []*Adapter
 	for _, adapter := range adapters {
 		if adapter.Inet == ip {
-			return adapter
+			rv = append(rv, adapter)
+			break
 		}
 	}
-	return nil
+	for _, adapter := range adapters {
+		if adapter.Name == rv[0].Name+":1" {
+			rv = append(rv, adapter)
+			break
+		}
+	}
+	return rv
 }
 
 func GetIfInfoService(ip string) []*Adapter {
@@ -260,7 +267,7 @@ type RunningStatus struct {
 	IsDpdkDriverOKFlag           bool `json:"is_dpdk_driver_ok_flag" binding:"required"`
 	IsProcessRunningFlag         bool `json:"is_process_running_flag" binding:"required"`
 	IsDpdkBindedFlag             bool `json:"is_dpdk_binded_flag" binding:"required"`
-	IsDpdkNicBindShellOKFlag     bool `json:"is_dpdk_nic_bind_shell_ok_flag"`
+	IsDpdkNicBindShellOKFlag     bool `json:"is_dpdk_nic_bind_shell_ok_flag" binding:"required"`
 	IsDpdkNicConfigFileExistFlag bool `json:"is_dpdk_nic_config_file_exist_flag" binding:"required"`
 }
 
@@ -290,12 +297,10 @@ func GetRunningStatus() RunningStatus {
 }
 
 func ReadDpdkNicBindShell(filepath string) (map[string]string, error) {
-	dpdkNicBindBytes, err := utils.ReadFileFast(filepath)
+	dpdkNicBindSlice, err := utils.ReadFileFast2Slice(filepath)
 	if err != nil {
 		return nil, err
 	}
-	dpdkNicBindStr := string(dpdkNicBindBytes)
-	dpdkNicBindSlice := strings.Split(dpdkNicBindStr, utils.CRLF)
 
 	options := map[string]string{}
 	for _, line := range dpdkNicBindSlice {
@@ -313,6 +318,87 @@ func ReadDpdkNicBindShell(filepath string) (map[string]string, error) {
 		}
 	}
 	return options, nil
+}
+
+func GetCrontabSlice() ([]string, error) {
+	crontabBytes, err := utils.ReadFileFast("/var/spool/cron/root")
+	if err != nil {
+		return nil, err
+	}
+	crontabStr := string(crontabBytes)
+	crontabSlice := strings.Split(crontabStr, utils.CRLF)
+	return crontabSlice, nil
+}
+
+func GetNtpIP() (string, error) {
+	crontabSlice, err := GetCrontabSlice()
+	if err != nil {
+		return "", err
+	}
+	var ntpIP string
+	for _, line := range crontabSlice {
+		if strings.Contains(line, "ntpdate") {
+			words := strings.Split(line, " ")
+			ntpIP = words[len(words)-1]
+		}
+	}
+	return ntpIP, nil
+}
+
+func CfgNtpIP(ntpIP string) error {
+	crontabSlice, err := GetCrontabSlice()
+	if err != nil {
+		return err
+	}
+	crontabNtp := fmt.Sprintf("*/30 * * * * ntpdate %s", ntpIP)
+	isNew := true
+	for ix, line := range crontabSlice {
+		if strings.Contains(line, "ntpdate") {
+			isNew = false
+			crontabSlice[ix] = crontabNtp
+		}
+	}
+	if isNew {
+		crontabSlice = append(crontabSlice, crontabNtp)
+	}
+	crontabOutStr := strings.Join(crontabSlice, utils.CRLF)
+	err = utils.WriteFileFast("/var/spool/cron/root", []byte(crontabOutStr))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func GetMsAgentIniCfg() (map[string]string, error) {
+	cfg, err := goconfig.LoadConfigFile("/etc/msagent.ini")
+	if err != nil {
+		return nil, err
+	}
+	rv := make(map[string]string)
+	value, err := cfg.GetValue("device", "sn")
+	if err != nil {
+		return nil, err
+	}
+	rv["device_sn"] = value
+	value, err = cfg.GetValue("ms", "host")
+	if err != nil {
+		return nil, err
+	}
+	rv["ms_host"] = value
+	return rv, nil
+}
+
+func SetIniFile(filepath, section, key, value string) error {
+	cfg, err := goconfig.LoadConfigFile(filepath)
+	if err != nil {
+		return err
+	}
+	cfg.SetValue(section, key, value)
+	err = goconfig.SaveConfigFile(cfg, filepath)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func PingDial(ipAddr string, timeout time.Duration) (bool, error) {
@@ -349,4 +435,58 @@ func PingDial(ipAddr string, timeout time.Duration) (bool, error) {
 	}
 	p.Stop()
 	return result, nil
+}
+
+type Route struct {
+	Destination string
+	Nexthop     string
+}
+
+func GetRouteInfoManage(ifName string) ([]Route, error) {
+	lines, err := utils.ReadFileFast2Slice("/etc/sysconfig/network-scripts/route-" + ifName)
+	if err != nil {
+		return nil, err
+	}
+	var rv []Route
+	for _, line := range lines {
+		words := strings.Split(line, "via")
+		if len(words) == 2 {
+			route := Route{strings.TrimSpace(words[0]), strings.TrimSpace(words[1])}
+			rv = append(rv, route)
+		}
+	}
+	return rv, nil
+}
+
+func CfgManageRoute(ifName string, routes []Route) error {
+	var lines []string
+	for _, route := range routes {
+		lines = append(lines, fmt.Sprintf("%s via %s", route.Destination, route.Nexthop))
+	}
+	content := []byte(strings.Join(lines, utils.CRLF))
+	err := utils.WriteFileFast("/etc/sysconfig/network-scripts/route-"+ifName, content)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func CfgServiceIf(device, ipaddr, netmask, saveDirpath string) (IfCfg, error) {
+	ifcfg := NewDefaultIfCfg()
+	ifcfg.DEVICE = device
+	ifcfg.IPADDR = ipaddr
+	ifcfg.NETMASK = netmask
+
+	// _, err := utils.ExecuteAndGetResultCombineError(fmt.Sprintf("ifconfig %s %s netmask %s", device, ipaddr, netmask))
+	// if err != nil {
+	// return ifcfg, err
+	// }
+
+	saveFilepath := filepath.Join(saveDirpath, "ifcfg-"+ifcfg.DEVICE)
+	err := ifcfg.SaveConfigFile(saveFilepath)
+	if err != nil {
+		return ifcfg, err
+	}
+
+	return ifcfg, err
 }

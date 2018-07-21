@@ -89,6 +89,23 @@ func ReadFileFast(filepath string) ([]byte, error) {
 	return data, nil
 }
 
+// ReadFileFast read file quickly and put data into a slice
+func ReadFileFast2Slice(filepath string) ([]string, error) {
+	bytes, err := ReadFileFast(filepath)
+	if err != nil {
+		return nil, err
+	}
+	str := string(bytes)
+	strSlice := strings.Split(str, CRLF)
+	var rv []string
+	for _, value := range strSlice {
+		if value != "" {
+			rv = append(rv, value)
+		}
+	}
+	return rv, nil
+}
+
 // WriteFileFast write file quickly
 func WriteFileFast(filepath string, content []byte) error {
 	err := ioutil.WriteFile(filepath, content, 0666)

@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Unknwon/goconfig"
 	"github.com/fourth04/initialize/sysinfo"
 	"github.com/fourth04/initialize/utils"
 	"github.com/manifoldco/promptui"
@@ -24,14 +23,6 @@ func initLog() {
 
 func init() {
 	initLog()
-}
-
-func setIniFile(filepath, section, key, value string) {
-	cfg, err := goconfig.LoadConfigFile(filepath)
-	utils.ErrHandleFatalln(err, "加载sdpi.ini配置文件失败：")
-	cfg.SetValue(section, key, value)
-	err = goconfig.SaveConfigFile(cfg, filepath)
-	utils.ErrHandlePrintln(err, "保存sdpi.ini配置文件失败：")
 }
 
 func validateYesNo(input string) error {
@@ -57,7 +48,7 @@ func validateIPOrNil(input string) error {
 	}
 	ip := net.ParseIP(input)
 	if ip == nil {
-		return errors.New("请输入正确IP格式，或者直接回车跳过！")
+		return errors.New("请输入正确IP格式，直接回车则跳过！")
 	}
 	return nil
 }
@@ -167,6 +158,49 @@ func main() {
 	log.Println("检测到dpdk_nic_config未存在！")
 
 	// ==================== 第一步，配置Linux系统相关配置 ====================
+	log.Println("正在配置系统hostname...")
+	hostname, _ := utils.ExecuteAndGetResultCombineError("hostname")
+	promptHostname := promptui.Prompt{
+		Label: fmt.Sprintf("当前系统hostname为%s：，请输入新hostname，直接回车则跳过", hostname),
+	}
+	newHostname, err := promptHostname.Run()
+	utils.ErrHandleFatalln(err, "输入参数错误！")
+	if newHostname != "" {
+		_, err := utils.ExecuteAndGetResultCombineError(fmt.Sprintf("hostname %s", newHostname))
+		utils.ErrHandleFatalln(err, "更改hostname错误！")
+	}
+	log.Println("配置系统hostname完成！")
+
+	log.Println("正在配置NTP服务地址...")
+	ntpIP, err := sysinfo.GetNtpIP()
+	utils.ErrHandleFatalln(err, "获取NTP服务地址失败！")
+	promptNtpIP := promptui.Prompt{
+		Label:    fmt.Sprintf("当前NTP服务地址为%s：，请输入新地址，直接回车则跳过", ntpIP),
+		Validate: validateIPOrNil,
+	}
+	newNtpIP, err := promptNtpIP.Run()
+	utils.ErrHandleFatalln(err, "输入参数错误！")
+	if newNtpIP != "" {
+		err := sysinfo.CfgNtpIP(newNtpIP)
+		utils.ErrHandleFatalln(err, "更新NTP crontab失败！")
+	}
+	log.Println("配置NTP服务地址完成！")
+
+	log.Println("正在配置DCP服务地址...")
+	msAgentIniCfg, err := sysinfo.GetMsAgentIniCfg()
+	utils.ErrHandleFatalln(err, "获取DCP服务地址失败！")
+	promptDcpIP := promptui.Prompt{
+		Label:    fmt.Sprintf("当前DCP服务地址为%s：，请输入新地址，直接回车则跳过", msAgentIniCfg["ms_host"]),
+		Validate: validateIPOrNil,
+	}
+	newDcpIP, err := promptDcpIP.Run()
+	utils.ErrHandleFatalln(err, "输入参数错误！")
+	if newDcpIP != "" {
+		err = sysinfo.SetIniFile("/etc/msagent.ini", "ms", "host", newDcpIP)
+		utils.ErrHandleFatalln(err, "更新DCP服务地址失败！")
+	}
+	utils.ErrHandleFatalln(err, "更新DCP服务地址失败！")
+	log.Println("配置DCP服务地址完成！")
 
 	// ==================== 第二步，管理网卡配置 ====================
 	promptYesNoQuit := promptui.Prompt{
@@ -178,10 +212,16 @@ func main() {
 	switch resultAdminPort {
 	case "yes":
 		log.Println("正在获取管理网卡配置信息...")
-		adapter := sysinfo.GetIfInfoManage(MANAGERIP)
-		if adapter != nil {
+		adapters := sysinfo.GetIfInfoManage(MANAGERIP)
+		if adapters != nil {
+			adapter := adapters[0]
 			log.Println("获取到管理网卡信息如下：")
-			log.Printf("网卡:%s IPv4地址:%s/%d IPv6地址:%s/%d\n", adapter.Name, adapter.Inet, adapter.Netmasklen, adapter.Inet6, adapter.Prefixlen)
+			log.Printf("默认网卡:%s IPv4地址:%s/%d IPv6地址:%s/%d\n", adapter.Name, adapter.Inet, adapter.Netmasklen, adapter.Inet6, adapter.Prefixlen)
+
+			if len(adapters) == 2 {
+				adapter := adapters[1]
+				log.Printf("管理网卡:%s IPv4地址:%s/%d IPv6地址:%s/%d\n", adapter.Name, adapter.Inet, adapter.Netmasklen, adapter.Inet6, adapter.Prefixlen)
+			}
 
 			ifStr := adapter.Name + ":1"
 
@@ -255,7 +295,8 @@ func main() {
 	log.Printf("你选择了网卡：%s\n", ifsSelectedStr)
 
 	log.Println("正在修改sdpi.ini配置文件...")
-	setIniFile(progConfigFilepath, "dns", "in_nic", ifsSelectedStr)
+	err = sysinfo.SetIniFile(progConfigFilepath, "dns", "in_nic", ifsSelectedStr)
+	utils.ErrHandleFatalln(err, "保存sdpi配置文件出错！")
 	log.Println("修改sdpi.ini配置文件完成！")
 
 	log.Println("正在尝试进行dpdk网卡绑定...")
@@ -330,15 +371,9 @@ func main() {
 		resultNetmask, err := promptNetmask.Run()
 		utils.ErrHandleFatalln(err, "输入参数错误！")
 
-		ifcfg := sysinfo.NewDefaultIfCfg()
-		ifcfg.DEVICE = ifStr
-		ifcfg.IPADDR = resultIP
-		ifcfg.NETMASK = resultNetmask
-
+		ifcfg, err := sysinfo.CfgServiceIf(ifStr, resultIP, resultNetmask, "/home/gdgyy")
+		utils.ErrHandleFatalln(err, "业务网卡"+ifStr+"配置失败！")
 		vIfsSelectedIfCfgs = append(vIfsSelectedIfCfgs, ifcfg)
-
-		err = ifcfg.SaveConfigFile("/etc/sysconfig/network-scripts/ifcfg-" + ifcfg.DEVICE)
-		utils.ErrHandleFatalln(err, "业务网卡"+ifStr+"配置文件生成失败！")
 		log.Println("业务网卡" + ifStr + "配置文件生成成功！")
 	}
 	log.Println("业务网卡配置完成！")
@@ -346,7 +381,7 @@ func main() {
 	if lengthVIfsSelected == 1 {
 		log.Println("开始进行业务网关配置...")
 		promptGW := promptui.Prompt{
-			Label:    "请输入业务网关地址，可跳过",
+			Label:    "请输入业务网关地址，直接回车则跳过",
 			Validate: validateIPOrNil,
 		}
 		resultGW, err := promptGW.Run()
