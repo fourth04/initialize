@@ -483,7 +483,7 @@ func CfgServiceIf(device, ipaddr, netmask, saveDirpath string) (IfCfg, error) {
 	}
 
 	saveFilepath := filepath.Join(saveDirpath, "ifcfg-"+ifcfg.DEVICE)
-	err := ifcfg.SaveConfigFile(saveFilepath)
+	err = ifcfg.SaveConfigFile(saveFilepath)
 	if err != nil {
 		return ifcfg, err
 	}
