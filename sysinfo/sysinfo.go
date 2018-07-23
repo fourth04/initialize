@@ -440,6 +440,7 @@ func PingDial(ipAddr string, timeout time.Duration) (bool, error) {
 
 type Route struct {
 	Destination string `json:"destination"`
+	Netmask     string `json:"netmask"`
 	Nexthop     string `json:"nexthop"`
 }
 
@@ -452,7 +453,14 @@ func GetRouteInfoManage(ifName string) ([]Route, error) {
 	for _, line := range lines {
 		words := strings.Split(line, "via")
 		if len(words) == 2 {
-			route := Route{strings.TrimSpace(words[0]), strings.TrimSpace(words[1])}
+			var route Route
+			newWords := strings.Split(strings.TrimSpace(words[0]), "/")
+			switch len(newWords) {
+			case 1:
+				route = Route{strings.TrimSpace(words[0]), "32", strings.TrimSpace(words[1])}
+			case 2:
+				route = Route{strings.TrimSpace(newWords[0]), strings.TrimSpace(newWords[1]), strings.TrimSpace(words[1])}
+			}
 			rv = append(rv, route)
 		}
 	}
@@ -462,7 +470,7 @@ func GetRouteInfoManage(ifName string) ([]Route, error) {
 func CfgManageRoute(ifName string, routes []Route) error {
 	var lines []string
 	for _, route := range routes {
-		lines = append(lines, fmt.Sprintf("%s via %s", route.Destination, route.Nexthop))
+		lines = append(lines, fmt.Sprintf("%s/%s via %s", route.Destination, route.Netmask, route.Nexthop))
 	}
 	content := []byte(strings.Join(lines, utils.CRLF) + utils.CRLF)
 	err := utils.WriteFileFast("/etc/sysconfig/network-scripts/route-"+ifName, content)
