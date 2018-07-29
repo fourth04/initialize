@@ -14,7 +14,6 @@ import (
 	"unicode"
 
 	"github.com/Unknwon/goconfig"
-	"github.com/fourth04/initialize/sysinfo"
 	"github.com/fourth04/initialize/utils"
 	ps "github.com/mitchellh/go-ps"
 	fastping "github.com/tatsushid/go-fastping"
@@ -534,7 +533,7 @@ func CfgManageRoute(ifName string, routes []Route) error {
 			continue
 		}
 	}
-	for _, command := range addCommands {
+	for _, command := range delCommands {
 		command = strings.Replace(command, "add", "del", 1)
 		_, err := utils.ExecuteAndGetResultCombineErrorNoLog(command)
 		if err != nil {
@@ -552,16 +551,18 @@ func CfgManageRoute(ifName string, routes []Route) error {
 }
 
 func CfgIf(device, ipaddr, netmask, saveDirpath string) (IfCfg, error) {
-	IPMask, _, err := utils.MaskConvert(netmask)
-	if err != nil {
-		return err
-	}
 	ifcfg := NewDefaultIfCfg()
 	ifcfg.DEVICE = device
 	ifcfg.IPADDR = ipaddr
+
+	IPMask, _, err := utils.MaskConvert(netmask)
+	if err != nil {
+		return ifcfg, err
+	}
+
 	ifcfg.NETMASK = IPMask
 
-	_, err := utils.ExecuteAndGetResultCombineError(fmt.Sprintf("ifconfig %s %s netmask %s", ifcfg.DEVICE, ifcfg.IPADDR, ifcfg.NETMASK))
+	_, err = utils.ExecuteAndGetResultCombineError(fmt.Sprintf("ifconfig %s %s netmask %s", ifcfg.DEVICE, ifcfg.IPADDR, ifcfg.NETMASK))
 	if err != nil {
 		return ifcfg, err
 	}
@@ -602,7 +603,7 @@ func UnbindDpdk() (RunningStatus, bool) {
 		}
 	}
 	if runningStatus.IsDpdkNicConfigFileExistFlag {
-		options, ok := sysinfo.IsDpdkNicBindShellOK()
+		options, ok := IsDpdkNicBindShellOK()
 		if !ok {
 			runningStatus.IsDpdkNicConfigFileExistFlag = false
 		} else {
@@ -627,7 +628,18 @@ func BindDpdk(ifsSelected []string) (RunningStatus, error) {
 		return runningStatus, errors.New("please unbind dpdk first")
 	}
 	ifsSelectedStr := strings.Join(ifsSelected, ",")
-	err = sysinfo.SetIniFile(progConfigFilepath, "dns", "in_nic", ifsSelectedStr)
+
+	options, err := ReadDpdkNicBindShell("/bin/dpdk-nic-bind.sh")
+	if err != nil {
+		return runningStatus, err
+	}
+
+	progConfigFilepath, ok := options["PROG_CONF_FILE"]
+	if !ok {
+		return runningStatus, errors.New("dpdk_nic_bind.sh DPDK_NICCONF_FILE parameter error")
+	}
+
+	err = SetIniFile(progConfigFilepath, "dns", "in_nic", ifsSelectedStr)
 	if err != nil {
 		return runningStatus, err
 	}
