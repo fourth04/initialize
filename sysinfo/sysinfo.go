@@ -362,15 +362,13 @@ func CfgNtpIP(ntpIP string) error {
 
 func GetDnsIPs() ([]string, error) {
 	resolvSlice, err := utils.ReadFileFast2Slice("/etc/resolv.conf")
-	fmt.Println(resolvSlice)
 	if err != nil {
 		return nil, err
 	}
 	var rv []string
 	for _, line := range resolvSlice {
-		fmt.Println(line)
 		if strings.HasPrefix(line, "nameserver") {
-			words := strings.Split(line, utils.CRLF)
+			words := strings.Split(line, " ")
 			if len(words) == 2 {
 				rv = append(rv, words[1])
 			}
@@ -383,7 +381,7 @@ func CfgDnsIPs(dnsIPs []string) error {
 	for i, ip := range dnsIPs {
 		dnsIPs[i] = "nameserver " + ip
 	}
-	lines := strings.Join(dnsIPs, utils.CRLF)
+	lines := strings.Join(dnsIPs, utils.CRLF) + utils.CRLF
 	err := utils.WriteFileFast("/etc/resolv.conf", []byte(lines))
 	return err
 }
