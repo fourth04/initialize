@@ -1,18 +1,20 @@
 package sysinfo
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/Unknwon/goconfig"
+	"github.com/fourth04/initialize/sysinfo"
 	"github.com/fourth04/initialize/utils"
 	ps "github.com/mitchellh/go-ps"
 	fastping "github.com/tatsushid/go-fastping"
@@ -80,15 +82,15 @@ func NewDefaultIfCfg() IfCfg {
 type Adapter struct {
 	Name       string `json:"name" binding:"required"`
 	Flags      []string
-	Mtu        int
+	Mtu        string
 	Inet       string
 	Netmask    string
-	Netmasklen int
+	Netmasklen string
 	Broadcast  string
 	Inet6      string
-	Prefixlen  int
+	Prefixlen  string
 	Ether      string
-	Txqueuelen int
+	Txqueuelen string
 }
 
 func GetIfInfo() []*Adapter {
@@ -118,10 +120,10 @@ func GetIfInfo() []*Adapter {
 			case strings.Contains(line, "mtu"):
 				adapter.Name = strings.Trim(words[0], ":")
 				adapter.Flags = strings.Split(strings.Trim(strings.Split(words[1], "<")[1], ">"), ",")
-				adapter.Mtu, _ = strconv.Atoi(words[len(words)-1])
+				adapter.Mtu = words[len(words)-1]
 			case strings.Contains(line, "inet6"):
 				adapter.Inet6 = words[1]
-				adapter.Prefixlen, _ = strconv.Atoi(words[3])
+				adapter.Prefixlen = words[3]
 			case strings.Contains(line, "inet"):
 				adapter.Inet = words[1]
 				adapter.Netmask = words[3]
@@ -130,13 +132,12 @@ func GetIfInfo() []*Adapter {
 				}
 			case strings.Contains(line, "ether"):
 				adapter.Ether = words[1]
-				adapter.Txqueuelen, _ = strconv.Atoi(words[3])
+				adapter.Txqueuelen = words[3]
 			}
 		}
 		if adapter.Netmask != "" {
-			mask := net.IPMask(net.ParseIP(adapter.Netmask).To4())
-			prefixSize, _ := mask.Size()
-			adapter.Netmasklen = prefixSize
+			_, CIDRMask, _ := utils.MaskConvert(adapter.Netmask)
+			adapter.Netmasklen = CIDRMask
 		}
 		rv = append(rv, &adapter)
 	}
@@ -155,8 +156,8 @@ func GetIfInfoHasPrefix(prefix string) []*Adapter {
 	return rv
 }
 
-func GetIfInfoManage(ip string) []*Adapter {
-	adapters := GetIfInfoHasPrefix("enp")
+func GetIfInfoManage(ip, ifPrefix string) []*Adapter {
+	adapters := GetIfInfoHasPrefix(ifPrefix)
 	var rv []*Adapter
 	for _, adapter := range adapters {
 		if adapter.Inet == ip {
@@ -173,10 +174,10 @@ func GetIfInfoManage(ip string) []*Adapter {
 	return rv
 }
 
-func GetIfInfoService(ip string) []*Adapter {
+func GetIfInfoService(ip, ifPrefix string) []*Adapter {
 	var rv []*Adapter
 	var ifManager *Adapter
-	adapters := GetIfInfoHasPrefix("enp")
+	adapters := GetIfInfoHasPrefix(ifPrefix)
 	for _, adapter := range adapters {
 		if adapter.Inet == ip {
 			ifManager = adapter
@@ -321,18 +322,8 @@ func ReadDpdkNicBindShell(filepath string) (map[string]string, error) {
 	return options, nil
 }
 
-func GetCrontabSlice() ([]string, error) {
-	crontabBytes, err := utils.ReadFileFast("/var/spool/cron/root")
-	if err != nil {
-		return nil, err
-	}
-	crontabStr := string(crontabBytes)
-	crontabSlice := strings.Split(strings.TrimSpace(crontabStr), utils.CRLF)
-	return crontabSlice, nil
-}
-
 func GetNtpIP() (string, error) {
-	crontabSlice, err := GetCrontabSlice()
+	crontabSlice, err := utils.ReadFileFast2Slice("/var/spool/cron/root")
 	if err != nil {
 		return "", err
 	}
@@ -347,7 +338,7 @@ func GetNtpIP() (string, error) {
 }
 
 func CfgNtpIP(ntpIP string) error {
-	crontabSlice, err := GetCrontabSlice()
+	crontabSlice, err := utils.ReadFileFast2Slice("/var/spool/cron/root")
 	if err != nil {
 		return err
 	}
@@ -370,6 +361,32 @@ func CfgNtpIP(ntpIP string) error {
 	return nil
 }
 
+func GetDnsIPs() ([]string, error) {
+	resolvSlice, err := utils.ReadFileFast2Slice("/etc/resolv.conf")
+	if err != nil {
+		return nil, err
+	}
+	var rv []string
+	for _, line := range resolvSlice {
+		if strings.HasPrefix(line, "nameserver") {
+			words := strings.Split(line, utils.CRLF)
+			if len(words) == 2 {
+				rv = append(rv, words[1])
+			}
+		}
+	}
+	return rv, nil
+}
+
+func CfgDnsIPs(dnsIPs []string) error {
+	for i, ip := range dnsIPs {
+		dnsIPs[i] = "nameserver " + ip
+	}
+	lines := strings.Join(dnsIPs, utils.CRLF)
+	err := utils.WriteFileFast("/etc/resolv.conf", []byte(lines))
+	return err
+}
+
 func GetMsAgentIniCfg() (map[string]string, error) {
 	cfg, err := goconfig.LoadConfigFile("/etc/msagent.ini")
 	if err != nil {
@@ -387,6 +404,25 @@ func GetMsAgentIniCfg() (map[string]string, error) {
 	}
 	rv["ms_host"] = value
 	return rv, nil
+}
+
+func GetDeviceStatus() (map[string]string, error) {
+	filepathDevice, _ := utils.ExecuteAndGetResultCombineErrorNoLog(`ls -t /var/msagent/history | grep device | sed -n "1p"`)
+	if filepathDevice == "" {
+		return nil, errors.New("file do not exists!")
+	}
+	lineBytes, err := utils.ReadFileFast(filepath.Join("/var/msagent/history", filepathDevice))
+	if err != nil {
+		return nil, err
+	}
+	words := strings.Split(string(lineBytes), "|")
+	if len(words) < 5 {
+		return nil, errors.New("file format error!")
+	}
+	return map[string]string{
+		"cpu_utilization":  words[3],
+		"disk_utilization": words[4],
+	}, nil
 }
 
 func SetIniFile(filepath, section, key, value string) error {
@@ -469,24 +505,63 @@ func GetRouteInfoManage(ifName string) ([]Route, error) {
 
 func CfgManageRoute(ifName string, routes []Route) error {
 	var lines []string
+	var newCommands []string
+	var oldCommands []string
 	for _, route := range routes {
-		lines = append(lines, fmt.Sprintf("%s/%s via %s", route.Destination, route.Netmask, route.Nexthop))
+		_, CIDRMask, err := utils.MaskConvert(route.Netmask)
+		if err != nil {
+			continue
+		}
+		newCommands = append(newCommands, fmt.Sprintf("route add -net %s/%s gw %s", route.Destination, CIDRMask, route.Nexthop))
+		lines = append(lines, fmt.Sprintf("%s/%s via %s", route.Destination, CIDRMask, route.Nexthop))
 	}
+	oldRoutes, err := GetRouteInfoManage(ifName)
+	if err != nil {
+		return err
+	}
+	for _, route := range oldRoutes {
+		_, CIDRMask, err := utils.MaskConvert(route.Netmask)
+		if err != nil {
+			continue
+		}
+		oldCommands = append(oldCommands, fmt.Sprintf("route add -net %s/%s gw %s", route.Destination, CIDRMask, route.Nexthop))
+	}
+	addCommands := utils.SliceSubtraction(newCommands, oldCommands)
+	delCommands := utils.SliceSubtraction(oldCommands, newCommands)
+	for _, command := range addCommands {
+		_, err := utils.ExecuteAndGetResultCombineErrorNoLog(command)
+		if err != nil {
+			continue
+		}
+	}
+	for _, command := range addCommands {
+		command = strings.Replace(command, "add", "del", 1)
+		_, err := utils.ExecuteAndGetResultCombineErrorNoLog(command)
+		if err != nil {
+			continue
+		}
+	}
+
+	// save route config file
 	content := []byte(strings.Join(lines, utils.CRLF) + utils.CRLF)
-	err := utils.WriteFileFast("/etc/sysconfig/network-scripts/route-"+ifName, content)
+	err = utils.WriteFileFast("/etc/sysconfig/network-scripts/route-"+ifName, content)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func CfgServiceIf(device, ipaddr, netmask, saveDirpath string) (IfCfg, error) {
+func CfgIf(device, ipaddr, netmask, saveDirpath string) (IfCfg, error) {
+	IPMask, _, err := utils.MaskConvert(netmask)
+	if err != nil {
+		return err
+	}
 	ifcfg := NewDefaultIfCfg()
 	ifcfg.DEVICE = device
 	ifcfg.IPADDR = ipaddr
-	ifcfg.NETMASK = netmask
+	ifcfg.NETMASK = IPMask
 
-	_, err := utils.ExecuteAndGetResultCombineError(fmt.Sprintf("ifconfig %s %s netmask %s", device, ipaddr, netmask))
+	_, err := utils.ExecuteAndGetResultCombineError(fmt.Sprintf("ifconfig %s %s netmask %s", ifcfg.DEVICE, ifcfg.IPADDR, ifcfg.NETMASK))
 	if err != nil {
 		return ifcfg, err
 	}
@@ -498,4 +573,76 @@ func CfgServiceIf(device, ipaddr, netmask, saveDirpath string) (IfCfg, error) {
 	}
 
 	return ifcfg, err
+}
+
+func UnbindDpdk() (RunningStatus, bool) {
+	runningStatus := GetRunningStatus()
+	if !runningStatus.IsDpdkDriverOKFlag {
+		_, err := utils.ExecuteAndGetResultCombineErrorNoLog("dpdk-setup.sh")
+		if err != nil {
+			runningStatus.IsDpdkDriverOKFlag = false
+		} else {
+			runningStatus.IsDpdkDriverOKFlag = true
+		}
+	}
+	if runningStatus.IsProcessRunningFlag {
+		_, err := utils.ExecuteAndGetResultCombineErrorNoLog("service sdpid stop")
+		if err != nil {
+			runningStatus.IsProcessRunningFlag = true
+		} else {
+			runningStatus.IsProcessRunningFlag = false
+		}
+	}
+	if runningStatus.IsDpdkBindedFlag {
+		_, err := utils.ExecuteAndGetResultCombineErrorNoLog("dpdk-nic-unbind.sh")
+		if err != nil {
+			runningStatus.IsDpdkBindedFlag = true
+		} else {
+			runningStatus.IsDpdkBindedFlag = false
+		}
+	}
+	if runningStatus.IsDpdkNicConfigFileExistFlag {
+		options, ok := sysinfo.IsDpdkNicBindShellOK()
+		if !ok {
+			runningStatus.IsDpdkNicConfigFileExistFlag = false
+		} else {
+			dpdkNicConfigFilepath := options["PROG_CONF_FILE"]
+			err := os.Remove(dpdkNicConfigFilepath)
+			if err != nil {
+				runningStatus.IsDpdkNicConfigFileExistFlag = true
+			} else {
+				runningStatus.IsDpdkNicConfigFileExistFlag = false
+			}
+		}
+	}
+	if !runningStatus.IsDpdkDriverOKFlag || runningStatus.IsProcessRunningFlag || runningStatus.IsDpdkDriverOKFlag || runningStatus.IsDpdkNicConfigFileExistFlag {
+		return runningStatus, false
+	}
+	return runningStatus, true
+}
+
+func BindDpdk(ifsSelected []string) (RunningStatus, error) {
+	runningStatus := GetRunningStatus()
+	if !runningStatus.IsDpdkDriverOKFlag || runningStatus.IsProcessRunningFlag || runningStatus.IsDpdkDriverOKFlag || runningStatus.IsDpdkNicConfigFileExistFlag {
+		return runningStatus, errors.New("please unbind dpdk first")
+	}
+	ifsSelectedStr := strings.Join(ifsSelected, ",")
+	err = sysinfo.SetIniFile(progConfigFilepath, "dns", "in_nic", ifsSelectedStr)
+	if err != nil {
+		return runningStatus, err
+	}
+	_, err = utils.ExecuteAndGetResultCombineError("dpdk-nic-bind.sh")
+	if err != nil {
+		return runningStatus, err
+	}
+	_, err = utils.ExecuteAndGetResultCombineError("service sdpid restart")
+	if err != nil {
+		return runningStatus, err
+	}
+	time.Sleep(time.Second * 30)
+	runningStatus = GetRunningStatus()
+	if runningStatus.IsDpdkDriverOKFlag || !runningStatus.IsProcessRunningFlag || !runningStatus.IsDpdkDriverOKFlag || !runningStatus.IsDpdkNicConfigFileExistFlag {
+		return runningStatus, errors.New("dpdk binding error")
+	}
+	return runningStatus, nil
 }

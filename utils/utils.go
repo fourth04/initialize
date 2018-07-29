@@ -77,6 +77,21 @@ func Contains(slice []string, sub string) bool {
 	return false
 }
 
+// SliceSubtraction returns the elements in a that aren't in b
+func SliceSubtraction(sliceA, sliceB []string) []string {
+	tmp := map[string]bool{}
+	for _, value := range sliceB {
+		tmp[value] = true
+	}
+	rv := []string{}
+	for _, value := range sliceA {
+		if _, ok := tmp[value]; !ok {
+			rv = append(rv, value)
+		}
+	}
+	return rv
+}
+
 // ReadFileFast read file quickly
 func ReadFileFast(filepath string) ([]byte, error) {
 	data, err := ioutil.ReadFile(filepath)
