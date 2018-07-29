@@ -266,9 +266,9 @@ func IsDpdkNicConfigFileExist() bool {
 
 type RunningStatus struct {
 	IsDpdkDriverOKFlag           bool `json:"is_dpdk_driver_ok_flag" binding:"required"`
+	IsDpdkNicBindShellOKFlag     bool `json:"is_dpdk_nic_bind_shell_ok_flag" binding:"required"`
 	IsProcessRunningFlag         bool `json:"is_process_running_flag" binding:"required"`
 	IsDpdkBindedFlag             bool `json:"is_dpdk_binded_flag" binding:"required"`
-	IsDpdkNicBindShellOKFlag     bool `json:"is_dpdk_nic_bind_shell_ok_flag" binding:"required"`
 	IsDpdkNicConfigFileExistFlag bool `json:"is_dpdk_nic_config_file_exist_flag" binding:"required"`
 }
 
@@ -362,11 +362,13 @@ func CfgNtpIP(ntpIP string) error {
 
 func GetDnsIPs() ([]string, error) {
 	resolvSlice, err := utils.ReadFileFast2Slice("/etc/resolv.conf")
+	fmt.Println(resolvSlice)
 	if err != nil {
 		return nil, err
 	}
 	var rv []string
 	for _, line := range resolvSlice {
+		fmt.Println(line)
 		if strings.HasPrefix(line, "nameserver") {
 			words := strings.Split(line, utils.CRLF)
 			if len(words) == 2 {
@@ -616,15 +618,15 @@ func UnbindDpdk() (RunningStatus, bool) {
 			}
 		}
 	}
-	if !runningStatus.IsDpdkDriverOKFlag || runningStatus.IsProcessRunningFlag || runningStatus.IsDpdkDriverOKFlag || runningStatus.IsDpdkNicConfigFileExistFlag {
-		return runningStatus, false
+	if runningStatus.IsDpdkDriverOKFlag && runningStatus.IsDpdkNicBindShellOKFlag && !runningStatus.IsProcessRunningFlag && !runningStatus.IsDpdkBindedFlag && !runningStatus.IsDpdkNicConfigFileExistFlag {
+		return runningStatus, true
 	}
-	return runningStatus, true
+	return runningStatus, false
 }
 
 func BindDpdk(ifsSelected []string) (RunningStatus, error) {
 	runningStatus := GetRunningStatus()
-	if !runningStatus.IsDpdkDriverOKFlag || runningStatus.IsProcessRunningFlag || runningStatus.IsDpdkDriverOKFlag || runningStatus.IsDpdkNicConfigFileExistFlag {
+	if !runningStatus.IsDpdkDriverOKFlag || !runningStatus.IsDpdkNicBindShellOKFlag || runningStatus.IsProcessRunningFlag || runningStatus.IsDpdkBindedFlag || runningStatus.IsDpdkNicConfigFileExistFlag {
 		return runningStatus, errors.New("please unbind dpdk first")
 	}
 	ifsSelectedStr := strings.Join(ifsSelected, ",")
@@ -653,8 +655,8 @@ func BindDpdk(ifsSelected []string) (RunningStatus, error) {
 	}
 	time.Sleep(time.Second * 30)
 	runningStatus = GetRunningStatus()
-	if runningStatus.IsDpdkDriverOKFlag || !runningStatus.IsProcessRunningFlag || !runningStatus.IsDpdkDriverOKFlag || !runningStatus.IsDpdkNicConfigFileExistFlag {
-		return runningStatus, errors.New("dpdk binding error")
+	if runningStatus.IsDpdkDriverOKFlag && runningStatus.IsDpdkNicBindShellOKFlag && runningStatus.IsProcessRunningFlag && runningStatus.IsDpdkBindedFlag && runningStatus.IsDpdkNicConfigFileExistFlag {
+		return runningStatus, nil
 	}
-	return runningStatus, nil
+	return runningStatus, errors.New("dpdk binding error")
 }
