@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -25,34 +24,6 @@ func init() {
 	initLog()
 }
 
-func validateYesNo(input string) error {
-	input = strings.ToLower(input)
-	ok := utils.Contains([]string{"yes", "no"}, input)
-	if !ok {
-		return errors.New("请输入yes/no！")
-	}
-	return nil
-}
-
-func validateIP(input string) error {
-	ip := net.ParseIP(input)
-	if ip == nil {
-		return errors.New("请输入正确IP格式！")
-	}
-	return nil
-}
-
-func validateIPOrNil(input string) error {
-	if input == "" {
-		return nil
-	}
-	ip := net.ParseIP(input)
-	if ip == nil {
-		return errors.New("请输入正确IP格式，直接回车则跳过！")
-	}
-	return nil
-}
-
 func main() {
 	/*
 		==================== 第零步，状态检测 ====================
@@ -66,7 +37,7 @@ func main() {
 	if !IsDpdkDriverOKFlag {
 		promptYesNoQuit := promptui.Prompt{
 			Label:    "dpdk驱动未安装，请选择是否需要安装驱动：yes/no",
-			Validate: validateYesNo,
+			Validate: utils.ValidateYesNo,
 		}
 		resultDpdkNicConfig, err := promptYesNoQuit.Run()
 		utils.ErrHandleFatalln(err, "输入参数错误！")
@@ -86,7 +57,7 @@ func main() {
 	if IsProcessRuningFlag {
 		promptYesNoQuit := promptui.Prompt{
 			Label:    "进程已启动，请选择是否需要停止进程：yes/no",
-			Validate: validateYesNo,
+			Validate: utils.ValidateYesNo,
 		}
 		resultDpdkNicConfig, err := promptYesNoQuit.Run()
 		utils.ErrHandleFatalln(err, "输入参数错误！")
@@ -106,7 +77,7 @@ func main() {
 	if len(ifsBinded) != 0 {
 		promptYesNoQuit := promptui.Prompt{
 			Label:    fmt.Sprintf("dpdk已有绑定网卡%s，请选择是否需要解绑：yes/no", strings.Join(ifsBinded, ",")),
-			Validate: validateYesNo,
+			Validate: utils.ValidateYesNo,
 		}
 		resultDpdkNicConfig, err := promptYesNoQuit.Run()
 		utils.ErrHandleFatalln(err, "输入参数错误！")
@@ -142,7 +113,7 @@ func main() {
 	if isDpdkNicConfigFileExist {
 		promptYesNoQuit := promptui.Prompt{
 			Label:    "检测到dpdk_nic_config已存在，请选择是否删除该文件：yes/no",
-			Validate: validateYesNo,
+			Validate: utils.ValidateYesNo,
 		}
 		resultDpdkNicConfig, err := promptYesNoQuit.Run()
 		utils.ErrHandleFatalln(err, "输入参数错误！")
@@ -157,83 +128,32 @@ func main() {
 	}
 	log.Println("检测到dpdk_nic_config未存在！")
 
-	// ==================== 第一步，配置Linux系统相关配置 ====================
-	log.Println("正在配置系统hostname...")
-	hostname, _ := utils.ExecuteAndGetResultCombineError("hostname")
-	promptHostname := promptui.Prompt{
-		Label: fmt.Sprintf("当前系统hostname为%s：，请输入新hostname，直接回车则跳过", hostname),
-	}
-	newHostname, err := promptHostname.Run()
-	utils.ErrHandleFatalln(err, "输入参数错误！")
-	if newHostname != "" {
-		_, err := utils.ExecuteAndGetResultCombineError(fmt.Sprintf("hostname %s", newHostname))
-		utils.ErrHandleFatalln(err, "更改hostname错误！")
-	}
-	log.Println("配置系统hostname完成！")
-
-	log.Println("正在配置NTP服务地址...")
-	ntpIP, err := sysinfo.GetNtpIP()
-	utils.ErrHandleFatalln(err, "获取NTP服务地址失败！")
-	var promptNtpIPLable string
-	if ntpIP == "" {
-		promptNtpIPLable = fmt.Sprintf("当前未配置NTP服务地址，请输入新地址，直接回车则跳过")
-	} else {
-		promptNtpIPLable = fmt.Sprintf("当前配置的NTP服务地址为：%s，请输入新地址，直接回车则跳过", ntpIP)
-	}
-	promptNtpIP := promptui.Prompt{
-		Label:    promptNtpIPLable,
-		Validate: validateIPOrNil,
-	}
-	newNtpIP, err := promptNtpIP.Run()
-	utils.ErrHandleFatalln(err, "输入参数错误！")
-	if newNtpIP != "" {
-		err := sysinfo.CfgNtpIP(newNtpIP)
-		utils.ErrHandleFatalln(err, "更新NTP crontab失败！")
-	}
-	log.Println("配置NTP服务地址完成！")
-
-	log.Println("正在配置DCP服务地址...")
-	msAgentIniCfg, err := sysinfo.GetMsAgentIniCfg()
-	utils.ErrHandleFatalln(err, "获取DCP服务地址失败！")
-	promptDcpIP := promptui.Prompt{
-		Label:    fmt.Sprintf("当前DCP服务地址为%s，请输入新地址，直接回车则跳过", msAgentIniCfg["ms_host"]),
-		Validate: validateIPOrNil,
-	}
-	newDcpIP, err := promptDcpIP.Run()
-	utils.ErrHandleFatalln(err, "输入参数错误！")
-	if newDcpIP != "" {
-		err = sysinfo.SetIniFile("/etc/msagent.ini", "ms", "host", newDcpIP)
-		utils.ErrHandleFatalln(err, "更新DCP服务地址失败！")
-	}
-	utils.ErrHandleFatalln(err, "更新DCP服务地址失败！")
-	log.Println("配置DCP服务地址完成！")
-
 	// ==================== 第二步，管理网卡配置 ====================
 	promptYesNoQuit := promptui.Prompt{
 		Label:    "请确认是否需要自定义管理网卡：yes/no",
-		Validate: validateYesNo,
+		Validate: utils.ValidateYesNo,
 	}
 	resultAdminPort, err := promptYesNoQuit.Run()
 	utils.ErrHandleFatalln(err, "输入参数错误！")
 	switch resultAdminPort {
 	case "yes":
 		log.Println("正在获取管理网卡配置信息...")
-		adapters := sysinfo.GetIfInfoManage(MANAGERIP)
+		adapters := sysinfo.GetIfInfoManage(MANAGERIP, "enp")
 		if adapters != nil {
 			adapter := adapters[0]
 			log.Println("获取到管理网卡信息如下：")
-			log.Printf("默认网卡:%s IPv4地址:%s/%d IPv6地址:%s/%d\n", adapter.Name, adapter.Inet, adapter.Netmasklen, adapter.Inet6, adapter.Prefixlen)
+			log.Printf("默认网卡:%s IPv4地址:%s/%s IPv6地址:%s/%s\n", adapter.Name, adapter.Inet, adapter.Netmasklen, adapter.Inet6, adapter.Prefixlen)
 
 			if len(adapters) == 2 {
 				adapter := adapters[1]
-				log.Printf("管理网卡:%s IPv4地址:%s/%d IPv6地址:%s/%d\n", adapter.Name, adapter.Inet, adapter.Netmasklen, adapter.Inet6, adapter.Prefixlen)
+				log.Printf("管理网卡:%s IPv4地址:%s/%s IPv6地址:%s/%s\n", adapter.Name, adapter.Inet, adapter.Netmasklen, adapter.Inet6, adapter.Prefixlen)
 			}
 
 			ifStr := adapter.Name + ":1"
 
 			promptIP := promptui.Prompt{
 				Label:    "请输入" + ifStr + "的IP地址",
-				Validate: validateIP,
+				Validate: utils.ValidateIP,
 			}
 
 			resultIP, err := promptIP.Run()
@@ -241,7 +161,7 @@ func main() {
 
 			promptNetmask := promptui.Prompt{
 				Label:    "请输入" + ifStr + "的子网掩码",
-				Validate: validateIP,
+				Validate: utils.ValidateIP,
 			}
 			resultNetmask, err := promptNetmask.Run()
 			utils.ErrHandleFatalln(err, "输入参数错误！")
@@ -262,15 +182,15 @@ func main() {
 	// ==================== 第三步，业务网卡配置 ====================
 	log.Println("正在获取网卡配置情况...")
 	adapterNames := []string{}
-	adapters := sysinfo.GetIfInfoService(MANAGERIP)
+	adapters := sysinfo.GetIfInfoService(MANAGERIP, "enp")
 	log.Println("共读取到网卡如下：")
 	for i, adapter := range adapters {
-		log.Printf("[%d] 网卡:%s IPv4地址:%s/%d IPv6地址:%s/%d\n", i, adapter.Name, adapter.Inet, adapter.Netmasklen, adapter.Inet6, adapter.Prefixlen)
+		log.Printf("[%d] 网卡:%s IPv4地址:%s/%s IPv6地址:%s/%s\n", i, adapter.Name, adapter.Inet, adapter.Netmasklen, adapter.Inet6, adapter.Prefixlen)
 		adapterNames = append(adapterNames, adapter.Name)
 	}
 	log.Println("获取网卡配置情况完成！")
 
-	validate := func(input string) error {
+	validateIndex := func(input string) error {
 		indexsIfs := strings.Split(input, ",")
 		for _, index := range indexsIfs {
 			i, err := strconv.Atoi(index)
@@ -283,9 +203,10 @@ func main() {
 		}
 		return nil
 	}
+
 	prompt := promptui.Prompt{
 		Label:    "请输入需绑定网卡序号，多选请用逗号分隔",
-		Validate: validate,
+		Validate: validateIndex,
 	}
 
 	inputIfs, err := prompt.Run()
@@ -364,7 +285,7 @@ func main() {
 	for _, ifStr := range vIfsSelected {
 		promptIP := promptui.Prompt{
 			Label:    "请输入" + ifStr + "的IP地址",
-			Validate: validateIP,
+			Validate: utils.ValidateIP,
 		}
 
 		resultIP, err := promptIP.Run()
@@ -372,12 +293,12 @@ func main() {
 
 		promptNetmask := promptui.Prompt{
 			Label:    "请输入" + ifStr + "的子网掩码",
-			Validate: validateIP,
+			Validate: utils.ValidateIP,
 		}
 		resultNetmask, err := promptNetmask.Run()
 		utils.ErrHandleFatalln(err, "输入参数错误！")
 
-		ifcfg, err := sysinfo.CfgServiceIf(ifStr, resultIP, resultNetmask, "/home/gdgyy")
+		ifcfg, err := sysinfo.CfgIf(ifStr, resultIP, resultNetmask, "/etc/sysconfig/network-scripts")
 		utils.ErrHandleFatalln(err, "业务网卡"+ifStr+"配置失败！")
 		vIfsSelectedIfCfgs = append(vIfsSelectedIfCfgs, ifcfg)
 		log.Println("业务网卡" + ifStr + "配置文件生成成功！")
@@ -388,7 +309,7 @@ func main() {
 		log.Println("开始进行业务网关配置...")
 		promptGW := promptui.Prompt{
 			Label:    "请输入业务网关地址，直接回车则跳过",
-			Validate: validateIPOrNil,
+			Validate: utils.ValidateIPOrNil,
 		}
 		resultGW, err := promptGW.Run()
 		utils.ErrHandleFatalln(err, "输入参数错误！")

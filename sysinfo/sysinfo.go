@@ -607,7 +607,7 @@ func UnbindDpdk() (RunningStatus, bool) {
 		if !ok {
 			runningStatus.IsDpdkNicConfigFileExistFlag = false
 		} else {
-			dpdkNicConfigFilepath := options["PROG_CONF_FILE"]
+			dpdkNicConfigFilepath := options["DPDK_NICCONF_FILE"]
 			err := os.Remove(dpdkNicConfigFilepath)
 			if err != nil {
 				runningStatus.IsDpdkNicConfigFileExistFlag = true
@@ -636,7 +636,7 @@ func BindDpdk(ifsSelected []string) (RunningStatus, error) {
 
 	progConfigFilepath, ok := options["PROG_CONF_FILE"]
 	if !ok {
-		return runningStatus, errors.New("dpdk_nic_bind.sh DPDK_NICCONF_FILE parameter error")
+		return runningStatus, errors.New("dpdk_nic_bind.sh PROG_CONF_FILE parameter error")
 	}
 
 	err = SetIniFile(progConfigFilepath, "dns", "in_nic", ifsSelectedStr)
