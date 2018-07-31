@@ -280,12 +280,17 @@ func GetRunningStatus() RunningStatus {
 		isDpdkNicConfigFileExistFlag = false
 	} else {
 		isDpdkNicBindShellOKFlag = true
-		dpdkNicConfigFilepath := options["PROG_CONF_FILE"]
-		tmpFlag, err := utils.IsFileExist(dpdkNicConfigFilepath)
-		if err != nil {
+		dpdkNicConfigFilepath, ok := options["DPDK_NICCONF_FILE"]
+		if !ok {
 			isDpdkNicConfigFileExistFlag = false
 		} else {
-			isDpdkNicConfigFileExistFlag = tmpFlag
+			tmpFlag, err := utils.IsFileExist(dpdkNicConfigFilepath)
+			if err != nil {
+				isDpdkNicConfigFileExistFlag = false
+			} else {
+				isDpdkNicConfigFileExistFlag = tmpFlag
+			}
+
 		}
 	}
 	return RunningStatus{
@@ -607,12 +612,16 @@ func UnbindDpdk() (RunningStatus, bool) {
 		if !ok {
 			runningStatus.IsDpdkNicConfigFileExistFlag = false
 		} else {
-			dpdkNicConfigFilepath := options["DPDK_NICCONF_FILE"]
-			err := os.Remove(dpdkNicConfigFilepath)
-			if err != nil {
-				runningStatus.IsDpdkNicConfigFileExistFlag = true
-			} else {
+			dpdkNicConfigFilepath, ok := options["DPDK_NICCONF_FILE"]
+			if !ok {
 				runningStatus.IsDpdkNicConfigFileExistFlag = false
+			} else {
+				err := os.Remove(dpdkNicConfigFilepath)
+				if err != nil {
+					runningStatus.IsDpdkNicConfigFileExistFlag = true
+				} else {
+					runningStatus.IsDpdkNicConfigFileExistFlag = false
+				}
 			}
 		}
 	}
