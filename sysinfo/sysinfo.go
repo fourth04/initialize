@@ -164,10 +164,12 @@ func GetIfInfoManage(ip, ifPrefix string) []*Adapter {
 			break
 		}
 	}
-	for _, adapter := range adapters {
-		if adapter.Name == rv[0].Name+":1" {
-			rv = append(rv, adapter)
-			break
+	if len(rv) > 0 {
+		for _, adapter := range adapters {
+			if adapter.Name == rv[0].Name+":1" {
+				rv = append(rv, adapter)
+				break
+			}
 		}
 	}
 	return rv
