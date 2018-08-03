@@ -486,10 +486,10 @@ type Route struct {
 	Nexthop     string `json:"nexthop"`
 }
 
-func GetRouteInfoManage(ifName string) ([]Route, error) {
+func GetRouteInfoManage(ifName string) []Route {
 	lines, err := utils.ReadFileFast2Slice("/etc/sysconfig/network-scripts/route-" + ifName)
 	if err != nil {
-		return nil, err
+		return []Route{}
 	}
 	var rv []Route
 	for _, line := range lines {
@@ -506,7 +506,7 @@ func GetRouteInfoManage(ifName string) ([]Route, error) {
 			rv = append(rv, route)
 		}
 	}
-	return rv, nil
+	return rv
 }
 
 func CfgManageRoute(ifName string, routes []Route) error {
@@ -521,7 +521,7 @@ func CfgManageRoute(ifName string, routes []Route) error {
 		newCommands = append(newCommands, fmt.Sprintf("route add -net %s/%s gw %s", route.Destination, CIDRMask, route.Nexthop))
 		lines = append(lines, fmt.Sprintf("%s/%s via %s", route.Destination, CIDRMask, route.Nexthop))
 	}
-	oldRoutes, _ := GetRouteInfoManage(ifName)
+	oldRoutes := GetRouteInfoManage(ifName)
 	for _, route := range oldRoutes {
 		_, CIDRMask, err := utils.MaskConvert(route.Netmask)
 		if err != nil {
