@@ -93,7 +93,7 @@ type Adapter struct {
 }
 
 func GetIfInfo() []*Adapter {
-	stdout, _ := utils.ExecuteAndGetResultCombineErrorNoLog("ifconfig -a")
+	stdout, _ := utils.ExecuteAndGetResultCombineError("ifconfig -a")
 
 	var pat string
 
@@ -411,7 +411,7 @@ func GetMsAgentIniCfg() (map[string]string, error) {
 }
 
 func GetDeviceStatus() (map[string]string, error) {
-	filepathDevice, _ := utils.ExecuteAndGetResultCombineErrorNoLog(`ls -t /var/msagent/history | grep device | sed -n "1p"`)
+	filepathDevice, _ := utils.ExecuteAndGetResultCombineError(`ls -t /var/msagent/history | grep device | sed -n "1p"`)
 	if filepathDevice == "" {
 		return nil, errors.New("file do not exists!")
 	}
@@ -533,14 +533,14 @@ func CfgManageRoute(ifName string, routes []Route) error {
 	addCommands := utils.SliceSubtraction(newCommands, oldCommands)
 	delCommands := utils.SliceSubtraction(oldCommands, newCommands)
 	for _, command := range addCommands {
-		_, err := utils.ExecuteAndGetResultCombineErrorNoLog(command)
+		_, err := utils.ExecuteAndGetResultCombineError(command)
 		if err != nil {
 			continue
 		}
 	}
 	for _, command := range delCommands {
 		command = strings.Replace(command, "add", "del", 1)
-		_, err := utils.ExecuteAndGetResultCombineErrorNoLog(command)
+		_, err := utils.ExecuteAndGetResultCombineError(command)
 		if err != nil {
 			continue
 		}
@@ -584,7 +584,7 @@ func CfgIf(device, ipaddr, netmask, saveDirpath string) (IfCfg, error) {
 func UnbindDpdk() (RunningStatus, bool) {
 	runningStatus := GetRunningStatus()
 	if !runningStatus.IsDpdkDriverOKFlag {
-		_, err := utils.ExecuteAndGetResultCombineErrorNoLog("dpdk-setup.sh")
+		_, err := utils.ExecuteAndGetResultCombineError("dpdk-setup.sh")
 		if err != nil {
 			runningStatus.IsDpdkDriverOKFlag = false
 		} else {
@@ -592,7 +592,7 @@ func UnbindDpdk() (RunningStatus, bool) {
 		}
 	}
 	if runningStatus.IsProcessRunningFlag {
-		_, err := utils.ExecuteAndGetResultCombineErrorNoLog("service sdpid stop")
+		_, err := utils.ExecuteAndGetResultCombineError("service sdpid stop")
 		if err != nil {
 			runningStatus.IsProcessRunningFlag = true
 		} else {
@@ -600,7 +600,7 @@ func UnbindDpdk() (RunningStatus, bool) {
 		}
 	}
 	if runningStatus.IsDpdkBindedFlag {
-		_, err := utils.ExecuteAndGetResultCombineErrorNoLog("dpdk-nic-unbind.sh")
+		_, err := utils.ExecuteAndGetResultCombineError("dpdk-nic-unbind.sh")
 		if err != nil {
 			runningStatus.IsDpdkBindedFlag = true
 		} else {
