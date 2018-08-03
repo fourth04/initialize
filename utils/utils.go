@@ -96,9 +96,7 @@ func SliceSubtraction(sliceA, sliceB []string) []string {
 func ReadFileFast(filepath string) ([]byte, error) {
 	data, err := ioutil.ReadFile(filepath)
 	if err != nil {
-		log.Printf("An error occurred on opening the inputfile\n" +
-			"Does the file exist?\n" +
-			"Have you got acces to it?\n")
+		log.Printf(filepath + " does not exist")
 		return []byte{}, err
 	}
 	return data, nil

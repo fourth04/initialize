@@ -521,10 +521,7 @@ func CfgManageRoute(ifName string, routes []Route) error {
 		newCommands = append(newCommands, fmt.Sprintf("route add -net %s/%s gw %s", route.Destination, CIDRMask, route.Nexthop))
 		lines = append(lines, fmt.Sprintf("%s/%s via %s", route.Destination, CIDRMask, route.Nexthop))
 	}
-	oldRoutes, err := GetRouteInfoManage(ifName)
-	if err != nil {
-		return err
-	}
+	oldRoutes, _ := GetRouteInfoManage(ifName)
 	for _, route := range oldRoutes {
 		_, CIDRMask, err := utils.MaskConvert(route.Netmask)
 		if err != nil {
@@ -550,7 +547,7 @@ func CfgManageRoute(ifName string, routes []Route) error {
 
 	// save route config file
 	content := []byte(strings.Join(lines, utils.CRLF) + utils.CRLF)
-	err = utils.WriteFileFast("/etc/sysconfig/network-scripts/route-"+ifName, content)
+	err := utils.WriteFileFast("/etc/sysconfig/network-scripts/route-"+ifName, content)
 	if err != nil {
 		return err
 	}
