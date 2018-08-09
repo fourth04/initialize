@@ -253,12 +253,8 @@ func IsDpdkNicBindShellOK() (map[string]string, bool) {
 	return options, true
 }
 
-func IsDpdkNicConfigFileExist() bool {
-	options, ok := IsDpdkNicBindShellOK()
-	if !ok {
-		return false
-	}
-	dpdkNicConfigFilepath := options["PROG_CONF_FILE"]
+func IsDpdkNicConfigFileExist(options map[string]string) bool {
+	dpdkNicConfigFilepath := options["DPDK_NICCONF_FILE"]
 	isDpdkNicConfigFileExist, err := utils.IsFileExist(dpdkNicConfigFilepath)
 	if err != nil {
 		return false
@@ -275,25 +271,12 @@ type RunningStatus struct {
 }
 
 func GetRunningStatus() RunningStatus {
-	var isDpdkNicBindShellOKFlag, isDpdkNicConfigFileExistFlag bool
-	options, ok := IsDpdkNicBindShellOK()
-	if !ok {
-		isDpdkNicBindShellOKFlag = false
+	var isDpdkNicConfigFileExistFlag bool
+	options, isDpdkNicBindShellOKFlag := IsDpdkNicBindShellOK()
+	if !isDpdkNicBindShellOKFlag {
 		isDpdkNicConfigFileExistFlag = false
 	} else {
-		isDpdkNicBindShellOKFlag = true
-		dpdkNicConfigFilepath, ok := options["DPDK_NICCONF_FILE"]
-		if !ok {
-			isDpdkNicConfigFileExistFlag = false
-		} else {
-			tmpFlag, err := utils.IsFileExist(dpdkNicConfigFilepath)
-			if err != nil {
-				isDpdkNicConfigFileExistFlag = false
-			} else {
-				isDpdkNicConfigFileExistFlag = tmpFlag
-			}
-
-		}
+		isDpdkNicConfigFileExistFlag = IsDpdkNicConfigFileExist(options)
 	}
 	return RunningStatus{
 		IsDpdkDriverOKFlag:           IsDpdkDriverOK(),
@@ -581,6 +564,14 @@ func CfgIf(device, ipaddr, netmask, saveDirpath string) (IfCfg, error) {
 }
 
 func UnbindDpdk() (RunningStatus, bool) {
+	// unbackup selected interface files
+	adapters := GetIfInfoHasPrefix("ven")
+	for _, adapter := range adapters {
+		ifName := adapter.Name[1:]
+		newPath := "/etc/sysconfig/network-scripts/ifcfg-" + ifName
+		os.Rename(newPath+".bak", newPath)
+	}
+
 	runningStatus := GetRunningStatus()
 	if !runningStatus.IsDpdkDriverOKFlag {
 		_, err := utils.ExecuteAndGetResultCombineError("dpdk-setup.sh")
@@ -606,24 +597,14 @@ func UnbindDpdk() (RunningStatus, bool) {
 			runningStatus.IsDpdkBindedFlag = false
 		}
 	}
-	if runningStatus.IsDpdkNicConfigFileExistFlag {
-		options, ok := IsDpdkNicBindShellOK()
-		if !ok {
-			runningStatus.IsDpdkNicConfigFileExistFlag = false
-		} else {
-			dpdkNicConfigFilepath, ok := options["DPDK_NICCONF_FILE"]
-			if !ok {
-				runningStatus.IsDpdkNicConfigFileExistFlag = false
-			} else {
-				err := os.Remove(dpdkNicConfigFilepath)
-				if err != nil {
-					runningStatus.IsDpdkNicConfigFileExistFlag = true
-				} else {
-					runningStatus.IsDpdkNicConfigFileExistFlag = false
-				}
-			}
-		}
+
+	options, isDpdkNicBindShellOKFlag := IsDpdkNicBindShellOK()
+	if !isDpdkNicBindShellOKFlag {
+		runningStatus.IsDpdkNicConfigFileExistFlag = false
+	} else {
+		runningStatus.IsDpdkNicConfigFileExistFlag = IsDpdkNicConfigFileExist(options)
 	}
+
 	if runningStatus.IsDpdkDriverOKFlag && runningStatus.IsDpdkNicBindShellOKFlag && !runningStatus.IsProcessRunningFlag && !runningStatus.IsDpdkBindedFlag && !runningStatus.IsDpdkNicConfigFileExistFlag {
 		return runningStatus, true
 	}
@@ -635,6 +616,13 @@ func BindDpdk(ifsSelected []string) (RunningStatus, error) {
 	if !runningStatus.IsDpdkDriverOKFlag || !runningStatus.IsDpdkNicBindShellOKFlag || runningStatus.IsProcessRunningFlag || runningStatus.IsDpdkBindedFlag || runningStatus.IsDpdkNicConfigFileExistFlag {
 		return runningStatus, errors.New("please unbind dpdk first")
 	}
+
+	// backup selected interface files
+	for _, ifName := range ifsSelected {
+		originalPath := "/etc/sysconfig/network-scripts/ifcfg-" + ifName
+		os.Rename(originalPath, originalPath+".bak")
+	}
+
 	ifsSelectedStr := strings.Join(ifsSelected, ",")
 
 	options, err := ReadDpdkNicBindShell("/bin/dpdk-nic-bind.sh")

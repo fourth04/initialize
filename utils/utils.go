@@ -153,7 +153,7 @@ func Execute(s string) error {
 	}
 
 	cmd := exec.Command("bash", "-c", s)
-	// log.Println("执行命令：", "bash", "-c", s)
+	// log.Println("Command：", "bash", "-c", s)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -174,7 +174,7 @@ func ExecuteAndPrintImmediately(s string) error {
 
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd := exec.Command("bash", "-c", s)
-	// log.Println("执行命令：", "bash", "-c", s)
+	// log.Println("Command：", "bash", "-c", s)
 	stdoutIn, _ := cmd.StdoutPipe()
 	stderrIn, _ := cmd.StderrPipe()
 	var errStdout, errStderr error
@@ -212,14 +212,14 @@ func ExecuteAndGetResult(s string) (string, string, error) {
 
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command("bash", "-c", s)
-	// log.Println("执行命令：", "bash", "-c", s)
+	// log.Println("Command：", "bash", "-c", s)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		return "", "", err
 	}
-	// log.Println("执行结果：", strings.TrimSpace(string(stdout.Bytes())))
+	// log.Println("Execute Return：", strings.TrimSpace(string(stdout.Bytes())))
 	return strings.TrimSpace(string(stdout.Bytes())), strings.TrimSpace(string(stderr.Bytes())), nil
 }
 
@@ -232,14 +232,14 @@ func ExecuteAndGetResultCombineError(s string) (string, error) {
 
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command("bash", "-c", s)
-	log.Println("执行命令：", "bash", "-c", s)
+	log.Println("Execute Command：", "bash", "-c", s)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		return "", err
 	}
-	log.Println("执行结果：", strings.TrimSpace(string(stdout.Bytes())))
+	log.Println("Execute Return：", strings.TrimSpace(string(stdout.Bytes())))
 	stderrStr := strings.TrimSpace(string(stderr.Bytes()))
 	if stderrStr != "" {
 		return "", errors.New(stderrStr)
