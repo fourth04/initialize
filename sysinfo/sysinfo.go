@@ -582,7 +582,8 @@ func UnbindDpdk() (RunningStatus, bool) {
 		}
 	}
 	if runningStatus.IsProcessRunningFlag {
-		_, err := utils.ExecuteAndGetResultCombineError("service sdpid stop")
+		// _, err := utils.ExecuteAndGetResultCombineError("service sdpid stop")
+		_, err := utils.ExecuteAndGetResultCombineError("sdpi stop")
 		if err != nil {
 			runningStatus.IsProcessRunningFlag = true
 		} else {
