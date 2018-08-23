@@ -537,10 +537,11 @@ func CfgManageRoute(ifName string, routes []Route) error {
 	return nil
 }
 
-func CfgIf(device, ipaddr, netmask, saveDirpath string) (IfCfg, error) {
+func CfgIf(device, ipaddr, netmask, gateway, saveDirpath string) (IfCfg, error) {
 	ifcfg := NewDefaultIfCfg()
 	ifcfg.DEVICE = device
 	ifcfg.IPADDR = ipaddr
+	ifcfg.GATEWAY = gateway
 
 	IPMask, _, err := utils.MaskConvert(netmask)
 	if err != nil {
@@ -552,6 +553,13 @@ func CfgIf(device, ipaddr, netmask, saveDirpath string) (IfCfg, error) {
 	_, err = utils.ExecuteAndGetResultCombineError(fmt.Sprintf("ifconfig %s %s netmask %s", ifcfg.DEVICE, ifcfg.IPADDR, ifcfg.NETMASK))
 	if err != nil {
 		return ifcfg, err
+	}
+
+	if gateway != "" {
+		_, err = utils.ExecuteAndGetResultCombineError(fmt.Sprintf("route add default gw %s", ifcfg.GATEWAY))
+		if err != nil {
+			return ifcfg, err
+		}
 	}
 
 	saveFilepath := filepath.Join(saveDirpath, "ifcfg-"+ifcfg.DEVICE)
