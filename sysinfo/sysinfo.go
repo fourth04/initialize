@@ -550,6 +550,17 @@ func CfgIf(ifcfg IfCfg, saveDirpath string) (IfCfg, error) {
 		return ifcfg, err
 	}
 
+	options, ok := IsDpdkNicBindShellOK()
+	if !ok {
+		return ifcfg, errors.New("dpdk_nic_bind.sh PROG_CONF_FILE parameter error")
+	}
+	progConfigFilepath, _ := options["PROG_CONF_FILE"]
+
+	err = SetIniFile(progConfigFilepath, "dns", "service_ipv4", ifcfg.IPADDR)
+	if err != nil {
+		return ifcfg, err
+	}
+
 	if ifcfg.GATEWAY != "" {
 		_, err = utils.ExecuteAndGetResultCombineError(fmt.Sprintf("route add default gw %s", ifcfg.GATEWAY))
 		if err != nil {
@@ -629,17 +640,13 @@ func BindDpdk(ifsSelected []string) (RunningStatus, error) {
 
 	ifsSelectedStr := strings.Join(ifsSelected, ",")
 
-	options, err := ReadDpdkNicBindShell("/bin/dpdk-nic-bind.sh")
-	if err != nil {
-		return runningStatus, err
-	}
-
-	progConfigFilepath, ok := options["PROG_CONF_FILE"]
+	options, ok := IsDpdkNicBindShellOK()
 	if !ok {
 		return runningStatus, errors.New("dpdk_nic_bind.sh PROG_CONF_FILE parameter error")
 	}
+	progConfigFilepath, _ := options["PROG_CONF_FILE"]
 
-	err = SetIniFile(progConfigFilepath, "dns", "in_nic", ifsSelectedStr)
+	err := SetIniFile(progConfigFilepath, "dns", "in_nic", ifsSelectedStr)
 	if err != nil {
 		return runningStatus, err
 	}

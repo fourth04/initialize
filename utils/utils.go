@@ -236,14 +236,15 @@ func ExecuteAndGetResultCombineError(s string) (string, error) {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return "", err
-	}
-	log.Println("Execute Return：", strings.TrimSpace(string(stdout.Bytes())))
+	err := cmd.Run()
 	stderrStr := strings.TrimSpace(string(stderr.Bytes()))
 	if stderrStr != "" {
 		return "", errors.New(stderrStr)
 	}
+	if err != nil {
+		return "", err
+	}
+	log.Println("Execute Return：", strings.TrimSpace(string(stdout.Bytes())))
 	return strings.TrimSpace(string(stdout.Bytes())), nil
 }
 
