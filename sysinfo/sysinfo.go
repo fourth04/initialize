@@ -40,6 +40,7 @@ type IfCfg struct {
 }
 
 func (ifcfg IfCfg) SaveConfigFile(filepath string) error {
+	ifcfg.ONBOOT = "yes"
 	var cfgStr string
 	t := reflect.TypeOf(ifcfg)
 	v := reflect.ValueOf(ifcfg)
@@ -496,22 +497,36 @@ func CfgManageRoute(ifName string, routes []Route) error {
 	var lines []string
 	var newCommands []string
 	var oldCommands []string
+	// 该管理网卡的新的配置
 	for _, route := range routes {
-		_, CIDRMask, err := utils.MaskConvert(route.Netmask)
+		IPMask, CIDRMask, err := utils.MaskConvert(route.Netmask)
 		if err != nil {
 			continue
 		}
-		newCommands = append(newCommands, fmt.Sprintf("route add -net %s/%s gw %s", route.Destination, CIDRMask, route.Nexthop))
+		switch IPMask {
+		case "32":
+			newCommands = append(newCommands, fmt.Sprintf("route add -host %s gw %s", route.Destination, route.Nexthop))
+		default:
+			newCommands = append(newCommands, fmt.Sprintf("route add -net %s/%s gw %s", route.Destination, CIDRMask, route.Nexthop))
+		}
 		lines = append(lines, fmt.Sprintf("%s/%s via %s", route.Destination, CIDRMask, route.Nexthop))
 	}
+	// 该管理网卡的旧的配置
 	oldRoutes := GetRouteInfoManage(ifName)
 	for _, route := range oldRoutes {
-		_, CIDRMask, err := utils.MaskConvert(route.Netmask)
+		IPMask, CIDRMask, err := utils.MaskConvert(route.Netmask)
 		if err != nil {
 			continue
 		}
-		oldCommands = append(oldCommands, fmt.Sprintf("route add -net %s/%s gw %s", route.Destination, CIDRMask, route.Nexthop))
+		switch IPMask {
+		case "32":
+			oldCommands = append(oldCommands, fmt.Sprintf("route add -host %s gw %s", route.Destination, route.Nexthop))
+		default:
+			oldCommands = append(oldCommands, fmt.Sprintf("route add -net %s/%s gw %s", route.Destination, CIDRMask, route.Nexthop))
+		}
 	}
+	// 新配置-旧配置 表示需新增的配置
+	// 旧配置-新配置 表示需删除的配置
 	addCommands := utils.SliceSubtraction(newCommands, oldCommands)
 	delCommands := utils.SliceSubtraction(oldCommands, newCommands)
 	for _, command := range addCommands {
@@ -528,7 +543,7 @@ func CfgManageRoute(ifName string, routes []Route) error {
 		}
 	}
 
-	// save route config file
+	// 更新管理网卡路由配置文件
 	content := []byte(strings.Join(lines, utils.CRLF) + utils.CRLF)
 	err := utils.WriteFileFast("/etc/sysconfig/network-scripts/route-"+ifName, content)
 	if err != nil {
