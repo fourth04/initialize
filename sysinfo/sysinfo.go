@@ -499,11 +499,11 @@ func CfgManageRoute(ifName string, routes []Route) error {
 	var oldCommands []string
 	// 该管理网卡的新的配置
 	for _, route := range routes {
-		IPMask, CIDRMask, err := utils.MaskConvert(route.Netmask)
+		_, CIDRMask, err := utils.MaskConvert(route.Netmask)
 		if err != nil {
 			continue
 		}
-		switch IPMask {
+		switch CIDRMask {
 		case "32":
 			newCommands = append(newCommands, fmt.Sprintf("route add -host %s gw %s", route.Destination, route.Nexthop))
 		default:
@@ -514,11 +514,11 @@ func CfgManageRoute(ifName string, routes []Route) error {
 	// 该管理网卡的旧的配置
 	oldRoutes := GetRouteInfoManage(ifName)
 	for _, route := range oldRoutes {
-		IPMask, CIDRMask, err := utils.MaskConvert(route.Netmask)
+		_, CIDRMask, err := utils.MaskConvert(route.Netmask)
 		if err != nil {
 			continue
 		}
-		switch IPMask {
+		switch CIDRMask {
 		case "32":
 			oldCommands = append(oldCommands, fmt.Sprintf("route add -host %s gw %s", route.Destination, route.Nexthop))
 		default:
