@@ -544,8 +544,9 @@ func CfgManageRoute(ifName string, routes []Route) error {
 	}
 
 	// 更新管理网卡路由配置文件
+	ifMainName := strings.Split(ifName, ":")[0]
 	content := []byte(strings.Join(lines, utils.CRLF) + utils.CRLF)
-	err := utils.WriteFileFast("/etc/sysconfig/network-scripts/route-"+ifName, content)
+	err := utils.WriteFileFast("/etc/sysconfig/network-scripts/route-"+ifMainName, content)
 	if err != nil {
 		return err
 	}
