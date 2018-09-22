@@ -471,7 +471,8 @@ type Route struct {
 }
 
 func GetRouteInfoManage(ifName string) []Route {
-	lines, err := utils.ReadFileFast2Slice("/etc/sysconfig/network-scripts/route-" + ifName)
+	ifMainName := strings.Split(ifName, ":")[0]
+	lines, err := utils.ReadFileFast2Slice("/etc/sysconfig/network-scripts/route-" + ifMainName)
 	if err != nil {
 		return []Route{}
 	}
