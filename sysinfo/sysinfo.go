@@ -15,6 +15,7 @@ import (
 
 	"github.com/Unknwon/goconfig"
 	"github.com/fourth04/initialize/utils"
+	"github.com/goinggo/mapstructure"
 	ps "github.com/mitchellh/go-ps"
 	fastping "github.com/tatsushid/go-fastping"
 )
@@ -55,6 +56,24 @@ func (ifcfg IfCfg) SaveConfigFile(filepath string) error {
 	}
 	err := utils.WriteFileFast(filepath, []byte(cfgStr))
 	return err
+}
+
+func (ifcfg *IfCfg) LoadConfigFile(filepath string) error {
+	lines, err := utils.ReadFileFast2Slice(filepath)
+	if err != nil {
+		return err
+	}
+	tmpDict := map[string]string{}
+	for _, line := range lines {
+		words := strings.Split(line, "=")
+		key := words[0]
+		value := words[1]
+		if !strings.HasPrefix(key, "#") {
+			tmpDict[key] = value
+		}
+	}
+	mapstructure.Decode(tmpDict, ifcfg)
+	return nil
 }
 
 func NewDefaultIfCfg() IfCfg {
@@ -176,19 +195,16 @@ func GetIfInfoManage(ip, ifPrefix string) []*Adapter {
 	return rv
 }
 
-func GetIfInfoService(ip, ifPrefix string) []*Adapter {
-	var rv []*Adapter
-	var ifManager *Adapter
+func GetIfInfoService(ifPrefix string) []*IfCfg {
+	var rv []*IfCfg
 	adapters := GetIfInfoHasPrefix(ifPrefix)
 	for _, adapter := range adapters {
-		if adapter.Inet == ip {
-			ifManager = adapter
+		ifcfg := &IfCfg{}
+		err := ifcfg.LoadConfigFile("/etc/sysconfig/network-scripts/ifcfg-" + adapter.Name)
+		if err != nil {
+			continue
 		}
-	}
-	for _, adapter := range adapters {
-		if !strings.HasPrefix(adapter.Name, ifManager.Name) {
-			rv = append(rv, adapter)
-		}
+		rv = append(rv, ifcfg)
 	}
 	return rv
 }
