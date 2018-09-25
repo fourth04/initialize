@@ -470,7 +470,7 @@ type Route struct {
 	Nexthop     string `json:"nexthop"`
 }
 
-func GetRouteInfoManage(ifName string) []Route {
+func GetRouteInfo(ifName string) []Route {
 	ifMainName := strings.Split(ifName, ":")[0]
 	lines, err := utils.ReadFileFast2Slice("/etc/sysconfig/network-scripts/route-" + ifMainName)
 	if err != nil {
@@ -513,7 +513,7 @@ func CfgManageRoute(ifName string, routes []Route) error {
 		lines = append(lines, fmt.Sprintf("%s/%s via %s", route.Destination, CIDRMask, route.Nexthop))
 	}
 	// 该管理网卡的旧的配置
-	oldRoutes := GetRouteInfoManage(ifName)
+	oldRoutes := GetRouteInfo(ifName)
 	for _, route := range oldRoutes {
 		_, CIDRMask, err := utils.MaskConvert(route.Netmask)
 		if err != nil {
