@@ -195,6 +195,23 @@ func GetIfInfoManage(ip, ifPrefix string) []*Adapter {
 	return rv
 }
 
+func GetIfInfoNotManager(ip, ifPrefix string) []*Adapter {
+	var rv []*Adapter
+	var ifManager *Adapter
+	adapters := GetIfInfoHasPrefix(ifPrefix)
+	for _, adapter := range adapters {
+		if adapter.Inet == ip {
+			ifManager = adapter
+		}
+	}
+	for _, adapter := range adapters {
+		if !strings.HasPrefix(adapter.Name, ifManager.Name) {
+			rv = append(rv, adapter)
+		}
+	}
+	return rv
+}
+
 func GetIfInfoService(ifPrefix string) []*IfCfg {
 	var rv []*IfCfg
 	adapters := GetIfInfoHasPrefix(ifPrefix)
